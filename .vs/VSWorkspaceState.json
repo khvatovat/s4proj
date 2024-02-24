@@ -1,0 +1,11 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\BioGuard",
+    "\\BioGuard\\src",
+    "\\BioGuard\\src\\minutia_extractor",
+    "\\BioGuard\\src\\minutia_extractor\\preprocessing"
+  ],
+  "SelectedNode": "\\BioGuard\\src\\minutia_extractor\\preprocessing\\preprocessing.rs",
+  "PreviewInSolutionExplorer": false
+}

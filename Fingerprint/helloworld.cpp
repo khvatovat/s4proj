@@ -142,7 +142,7 @@ HRESULT CaptureSample()
   }
 
   // Capture a biometric sample.
-  std::cout << "ANGEL Calling WinBioCaptureSample - Swipe sensor...\nPlease put your finger on the sensor\n\n";
+  std::cout << "Calling WinBioCaptureSample - Swipe sensor...\nPlease put your finger on the sensor\n";
 
   hr = WinBioCaptureSample(
     sessionHandle,
@@ -226,14 +226,6 @@ HRESULT CaptureSample()
 
 int main()
 {
-    vector<string> msg {"Ta mamanHello", "C++", "World", "from", "VS Code", "and the C++ extension!"};
-
-    for (const string& word : msg)
-    {
-        cout << word << " ";
-    }
-    cout << endl;
-
-    CreateDirectoryA("data", NULL);
+     CreateDirectoryA("data", NULL);
     while(!FAILED(CaptureSample()));
 }

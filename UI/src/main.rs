@@ -15,6 +15,9 @@ fn main() {
             .build();
 
         let cont=Box::new(Orientation::Vertical,10);
+        cont.set_margin_top(500);
+        cont.set_margin_start(800);
+        cont.set_margin_end(800);
 
         let button_auth = Button::with_label("Authentificate");
         let button_reg = Button::with_label("Register");

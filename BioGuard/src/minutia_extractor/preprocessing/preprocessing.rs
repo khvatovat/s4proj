@@ -33,3 +33,30 @@ fn histogram_equalization(image: &DynamicImage) -> RgbaImage {
 
     equalized_image
 }
+
+fn binarization(image: &DynamicImage) -> RgbaImage {
+    // Convert the input image to RGBA format    
+    let rgba_image = image.to_rgba8();
+
+    // Calculate histogram
+    let mut histogram = [0u32; 256];
+    for pixel in rgba_image.pixels() {
+        let intensity = pixel[0] as usize;
+        histogram[intensity] += 1;
+    }
+
+    // Apply threshold using histogram
+    let mut threshold = histogram.iter().max();
+    threshold = threshold - threshold / 5;
+    let mut binary_image = RgbaImage::new(rgba_image.width(), rgba_image.height());
+    for (x, y, pixel) in rgba_image.enumerate_pixels_mut() {
+        if pixel.to_rgb()[0] >= threshold {
+            binary_image.put_pixel(x, y, white);
+        }
+        else {
+            binary_image.put_pixel(x, y, black);
+        }
+    }
+
+    binary_image
+}

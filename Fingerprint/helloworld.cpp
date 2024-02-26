@@ -142,7 +142,7 @@ HRESULT CaptureSample()
   }
 
   // Capture a biometric sample.
-  std::cout << "ANGEL Calling WinBioCaptureSample - Swipe sensor...\n";
+  std::cout << "ANGEL Calling WinBioCaptureSample - Swipe sensor...\nPlease put your finger on the sensor\n\n";
 
   hr = WinBioCaptureSample(
     sessionHandle,
@@ -188,7 +188,7 @@ HRESULT CaptureSample()
     DWORD width = AnsiBdbRecord->HorizontalLineLength; // Width of image in pixels
     DWORD height = AnsiBdbRecord->VerticalLineLength; // Height of image in pixels
 
-    std::cout << "Ta maman Image resolution: " << width << " x " << height << "\n";
+    std::cout << "Image resolution: " << width << " x " << height << "\n";
 
     PBYTE firstPixel = (PBYTE)((PBYTE)AnsiBdbRecord) + sizeof(WINBIO_BDB_ANSI_381_RECORD);
 
@@ -204,6 +204,8 @@ HRESULT CaptureSample()
     BmpSetImageData(&bmp, data, width, height);
     BmpSave(&bmp, bmpFile);
     //ShellExecuteA(NULL, NULL, bmpFile.c_str(), NULL, NULL, SW_SHOWNORMAL);
+
+    std::cout << "Fingerprint Captured!\n\n";
 
     CFile raw("rawData.bin");
     raw.write(&data[0], data.size());

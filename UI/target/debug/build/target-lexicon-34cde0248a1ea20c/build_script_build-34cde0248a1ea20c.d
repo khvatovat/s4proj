@@ -1,8 +1,0 @@
-/afs/cri.epita.fr/user/p/pi/pierre.chain/u/SPE/s4proj/UI/target/debug/build/target-lexicon-34cde0248a1ea20c/build_script_build-34cde0248a1ea20c: /home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/build.rs /home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/src/data_model.rs /home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/src/triple.rs /home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/src/targets.rs
-
-/afs/cri.epita.fr/user/p/pi/pierre.chain/u/SPE/s4proj/UI/target/debug/build/target-lexicon-34cde0248a1ea20c/build_script_build-34cde0248a1ea20c.d: /home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/build.rs /home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/src/data_model.rs /home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/src/triple.rs /home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/src/targets.rs
-
-/home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/build.rs:
-/home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/src/data_model.rs:
-/home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/src/triple.rs:
-/home/pierre.chain/.cargo/registry/src/index.crates.io-6f17d22bba15001f/target-lexicon-0.12.14/src/targets.rs:

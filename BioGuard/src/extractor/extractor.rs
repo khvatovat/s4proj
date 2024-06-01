@@ -312,3 +312,7 @@ pub fn extract(image: &Vec<Vec<u8>>) -> Vec<Vec<u8>> {
     let res_image = remove_false_minutia(thinned_image, minutia, 10.0, 0.5);
     res_image
 }
+
+//pub fn run() -> bool {
+//    call_fingerprint_capture();
+//    let image = prep()

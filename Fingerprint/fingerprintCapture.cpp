@@ -142,7 +142,7 @@ HRESULT CaptureSample()
   }
 
   // Capture a biometric sample.
-  std::cout << "Calling WinBioCaptureSample - Swipe sensor...\nPlease put your finger on the sensor\n";
+  std::cout << "Welcome in the fingerprint capture process.\nPlease put your finger on the sensor...\n";
 
   hr = WinBioCaptureSample(
     sessionHandle,
@@ -176,8 +176,8 @@ HRESULT CaptureSample()
     return hr;
   }
 
-  std::cout << "Swipe processed - Unit ID: " << unitId << "\n";
-  std::cout << "Captured " << sampleSize << " bytes.\n";
+  //std::cout << "Swipe processed - Unit ID: " << unitId << "\n";
+  //std::cout << "Captured " << sampleSize << " bytes.\n";
 
   if(sample != NULL)
   {
@@ -188,7 +188,7 @@ HRESULT CaptureSample()
     DWORD width = AnsiBdbRecord->HorizontalLineLength; // Width of image in pixels
     DWORD height = AnsiBdbRecord->VerticalLineLength; // Height of image in pixels
 
-    std::cout << "Image resolution: " << width << " x " << height << "\n";
+    //std::cout << "Image resolution: " << width << " x " << height << "\n";
 
     PBYTE firstPixel = (PBYTE)((PBYTE)AnsiBdbRecord) + sizeof(WINBIO_BDB_ANSI_381_RECORD);
 
@@ -205,7 +205,8 @@ HRESULT CaptureSample()
     BmpSave(&bmp, bmpFile);
     //ShellExecuteA(NULL, NULL, bmpFile.c_str(), NULL, NULL, SW_SHOWNORMAL);
 
-    std::cout << "Fingerprint Captured!\n\n";
+    Sleep(300);
+    std::cout << "Fingerprint Captured.\nThank you!\n";
 
     CFile raw("rawData.bin");
     raw.write(&data[0], data.size());
@@ -226,6 +227,7 @@ HRESULT CaptureSample()
 
 int main()
 {
-     CreateDirectoryA("data", NULL);
-    while(!FAILED(CaptureSample()));
+    CreateDirectoryA("data", NULL);
+    CaptureSample();
+    Sleep(2500);
 }

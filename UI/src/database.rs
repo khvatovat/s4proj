@@ -5,9 +5,8 @@ use dotenv::dotenv;
 use crate::models::{User, Credential};
 
 pub async fn establish_connection() -> SqlitePool {
-    dotenv().ok();
-    let database_url = "./migrations/00000000000000_create_users/db.sql";//env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    SqlitePool::connect(&database_url).await.expect("Failed to connect to database")
+    let database_url = "sqlite://users.db";//env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    SqlitePool::connect(&database_url).await.unwrap()
 }
 
 pub async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
@@ -17,21 +16,6 @@ pub async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             fingerprint_image BLOB NOT NULL
-        )
-        "
-    )
-    .execute(pool)
-    .await?;
-
-    sqlx::query(
-        "
-        CREATE TABLE IF NOT EXISTS credentials (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            site TEXT NOT NULL,
-            site_username TEXT NOT NULL,
-            site_password TEXT NOT NULL
-            FOREIGN KEY (user_id) REFERENCES users(id)
         )
         "
     )

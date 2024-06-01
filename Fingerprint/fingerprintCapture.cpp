@@ -196,10 +196,7 @@ HRESULT CaptureSample()
     std::vector<uint8> data(width * height);
     memcpy(&data[0], firstPixel, width * height);
 
-    SYSTEMTIME st;
-    GetSystemTime(&st);
-    std::string s = std::to_string(st.wYear) + "." + std::to_string(st.wMonth) + "." + std::to_string(st.wDay) + "." + std::to_string(st.wHour) + "." + std::to_string(st.wMinute) + "." + std::to_string(st.wSecond) + "." + std::to_string(st.wMilliseconds);
-    std::string bmpFile = "data/fingerPrint_"+ s + ".bmp";
+    std::string bmpFile = "data/fingerPrint_input.bmp";
 
     BmpSetImageData(&bmp, data, width, height);
     BmpSave(&bmp, bmpFile);

@@ -2,7 +2,9 @@
 extern crate sqlx;
 extern crate dotenv;
 
-use database::save_credentials;
+use std::io::Write;
+use database::*;
+use tokio::main;
 use tokio::runtime::Runtime;
 use sqlx::{pool, SqlitePool};
 use dotenv::dotenv;
@@ -10,13 +12,15 @@ use std::env;
 use std::fs::File;
 use std::future::IntoFuture;
 use std::io::Read;
+use std::path::Path;
 
 mod models;
 mod database;
 
 use crate::models::{User, Credential};
 use crate::database::{establish_connection, create_tables, save_user, get_user, get_credentials};
-use std::process::{Command, ExitStatus};
+use std::process::{ExitStatus};
+use tokio::process::Command;
 use std::io;
 
 use app_state_derived_lenses::{username};
@@ -168,32 +172,51 @@ fn match_test() {
 }
 
 
-fn call_fingerprint_capture() {
-    let status = Command::new("powershell")
+async fn call_fingerprint_capture() -> io::Result<()> {
+    let output = Command::new("powershell")
         .arg("-Command")
-        .arg("Start-Process cmd -ArgumentList '/c .\\fingerprintCapture.exe' -Verb RunAs")
-        .status()
-        .expect("Failed to execute process");
+        .arg("Start-Process cmd -ArgumentList '/c .\\fingerprintCapture.exe' -Wait -Verb RunAs")
+        .output()
+        .await?;  // Await the command and handle the result
 
-    if status.success() {
+    if output.status.success() {
         println!("Process executed successfully");
     } else {
-        eprintln!("Process failed with exit code: {:?}", status.code());
+        eprintln!("Process failed with exit code: {:?}", output.status.code());
     }
+
+    Ok(())
 }
 
+fn convert_image_to_binary(file_path: &str) -> io::Result<Vec<u8>> {
+    let mut file = File::open(file_path)?;
+    let mut image = Vec::new();
+    file.read_to_end(&mut image)?;
+    Ok(image)
+}
 
-fn main() {
+fn binary_to_image(image: &Vec<u8>, file_path: &str) -> io::Result<()> {
+    let mut file = File::create(file_path)?;
+    file.write_all(image)?;
+    Ok(())
+}   
+
+#[tokio::main]
+async fn main() {
     dotenv().ok();
-    /*
+    
     let rt = Runtime::new().unwrap();
-    let pool = rt.block_on(establish_connection());
 
-    rt.block_on(create_tables(&pool)).expect("Failed to create tables");
-    */
+    let current_dir = env::current_dir().expect("Failed to get current directory");
+    let database_path = current_dir.join("users.db");
+    let database_url = format!("sqlite://{}", database_path.to_str().unwrap());
+    
+    let pool = SqlitePool::connect(&database_url).await.unwrap();
+
+    create_tables(&pool).await.expect("Failed to create tables");
     
     let size = (400.0, 400.0);
-    let main_windows = WindowDesc::new(login_ui())
+    let main_windows = WindowDesc::new(login_ui(pool.clone()))
     .title("Bioguard")
     .window_size(size);
     
@@ -205,7 +228,8 @@ fn main() {
     .expect("Failed to launch application");
 }
 
-fn login_ui() -> impl druid::Widget<AppState> {
+
+fn login_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
     let label = Label::new("Bioguard Login").padding(5.0);
 
     let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
@@ -216,6 +240,10 @@ fn login_ui() -> impl druid::Widget<AppState> {
         //TODO CALL VERIFICATION FUNCTION
         //TODO LAUNCH CREDENTIALS UI
     });
+
+    let register_button = Button::new("Register").on_click(move |_ctx, data: &mut AppState, _env| {
+        _ctx.new_window(WindowDesc::new(register_ui(pool.clone())).title("Register"));
+    });
     
     Flex::column()
     .with_child(label)
@@ -223,10 +251,52 @@ fn login_ui() -> impl druid::Widget<AppState> {
     .with_child(username_input)
     .with_spacer(20.0)
     .with_child(login_button)
+    .with_spacer(20.0)
+    .with_child(register_button)
     
 }
 
-fn credentials_ui() -> impl druid::Widget<AppState> {
+
+fn register_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
+    let label = Label::new("Bioguard").padding(5.0);
+
+    let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
+    
+    let info = Label::new("To register your account with your fingerprint,\nPlease click on the Register button").padding(5.0);
+    
+    let register_button = Button::new("Register").on_click(move |_ctx, data: &mut AppState, _env| {
+        
+        let pool = pool.clone();
+        let _username = data.username.clone();
+        tokio::spawn(async move {
+            println!("Username: {}", _username);
+            if let Err(e) = call_fingerprint_capture().await {
+                eprintln!("Failed to call fingerprint capture: {}", e);
+                return;
+            }
+            
+            let image_path = Path::new("data/fingerprint_Input.bmp");
+            let binary_data = convert_image_to_binary(image_path.to_str().unwrap()).expect("Failed to convert image to binary");
+            
+            save_user(&pool, &_username, binary_data).await.expect("Failed to save user");
+            println!("User saved successfully");
+        });
+
+    });
+    
+    Flex::column()
+    .with_child(label)
+    .with_spacer(20.0)
+    .with_child(username_input)
+    .with_spacer(20.0)
+    .with_child(info)
+    .with_spacer(20.0)
+    .with_child(register_button)
+
+    
+}
+
+fn credentials_ui(pool, SqlitePool, user_id: i64) -> impl druid::Widget<AppState> {
     let label = Label::new("Your Credentials").padding(5.0);
 
     let site_input = TextBox::new().with_placeholder("Site").lens(AppState::site);
@@ -234,12 +304,13 @@ fn credentials_ui() -> impl druid::Widget<AppState> {
     let site_password_input = TextBox::new().with_placeholder("Site Password").lens(AppState::site_password);
 
     let save_button = Button::new("Add Credential").on_click(|_ctx, data: &mut AppState, _env| {
-        let rt = Runtime::new().unwrap();
+        println!("TODO save credentials");
+        /*let rt = Runtime::new().unwrap();
         let pool = rt.block_on(establish_connection());
         //let user_id: i64 = get_user(&pool, &data.username).expect("Failed to find user").id;
 
         rt.block_on(save_credentials(&pool, 0/*user_id*/, &data.site, &data.site_username, &data.site_password))
-        .expect("Failed to save credentials");
+        .expect("Failed to save credentials");*/
     });
     
     Flex::column()
@@ -306,26 +377,3 @@ impl druid::AppDelegate<AppState> for AppDelegate {
     }
 }
 
-
-fn register_ui_builder() -> impl druid::Widget<AppState> {
-    let label = Label::new("Bioguard").padding(5.0);
-
-    let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
-    
-    let info = Label::new("To register your account with your fingerprint,\nPlease click on the Register button").padding(5.0);
-    
-    let register_button = Button::new("Register").on_click(|_ctx, data: &mut AppState, _env| {
-        println!("Username: {}", data.username);
-        call_fingerprint_capture();
-    });
-    
-    Flex::column()
-    .with_child(label)
-    .with_spacer(20.0)
-    .with_child(username_input)
-    .with_spacer(20.0)
-    .with_child(info)
-    .with_spacer(20.0)
-    .with_child(register_button)
-    
-}

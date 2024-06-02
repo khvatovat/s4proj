@@ -11,13 +11,26 @@ pub async fn establish_connection() -> SqlitePool {
 
 pub async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "
+        r#"
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             fingerprint_image BLOB NOT NULL
         )
-        "
+        "#
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS credentials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            site TEXT NOT NULL,
+            site_username TEXT NOT NULL,
+            site_password TEXT NOT NULL
+        )
+        "#
     )
     .execute(pool)
     .await?;
@@ -39,17 +52,17 @@ pub async fn save_user(pool: &SqlitePool, username: &str, fingerprint_image: Vec
     Ok(())
 }
 
-pub async fn save_credentials(pool: &SqlitePool, user_id: i64, site: &str, site_username: &str, site_password: &str) -> Result<(), sqlx::Error> {
+pub async fn save_credentials(pool: &SqlitePool, username: &str, site: &str, site_username: &str, site_password: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
         "
-        INSERT INTO credentials (user_id, site, site_username, site_password) VALUES (?, ?, ?, ?)
+        INSERT INTO credentials (username, site, site_username, site_password) VALUES (?, ?, ?, ?)
         "
     )
-    .bind(user_id)
+    .bind(username)
     .bind(site)
     .bind(site_username)
     .bind(site_password)
-    .execute(pool)
+    .fetch_all(pool)
     .await?;
 
     Ok(())
@@ -61,26 +74,26 @@ pub async fn get_user(pool: &SqlitePool, username: &str) -> Result<Option<User>,
         .fetch_optional(pool)
         .await? {
         Some(row) => Ok(Some(User {
-            id: row.get(0),
-            username: row.get(1),
-            fingerprint_image: row.get(2),
+            id: row.get("id"),
+            username: row.get("username"),
+            fingerprint_image: row.get("fingerprint_image"),
         })),
         None => Ok(None),
     }
 }
 
-pub async fn get_credentials(pool: &SqlitePool, user_id: i64) -> Result<Vec<Credential>, sqlx::Error> {
-    let rows = sqlx::query("SELECT id, user_id, site, site_username, site_password FROM credentials WHERE user_id = ?")
-    .bind(user_id)
+pub async fn get_credentials(pool: &SqlitePool, username: &str) -> Result<Vec<Credential>, sqlx::Error> {
+    let rows = sqlx::query("SELECT username, site, site_username, site_password FROM credentials WHERE username = ?")
+    .bind(username)
     .fetch_all(pool)
     .await?;
 
     let credentials = rows.into_iter().map(|row| Credential {
-        id: row.get(0),
-        user_id: row.get(1),
-        site: row.get(2),
-        site_username: row.get(3),
-        site_password: row.get(4),
+        id: 0,
+        username: row.get("username"),
+        site: row.get("site"),
+        site_username: row.get("site_username"),
+        site_password: row.get("site_password"),
     }).collect();
 
     Ok(credentials)

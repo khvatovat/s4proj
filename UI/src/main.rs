@@ -6,6 +6,7 @@ use std::io::Write;
 use database::*;
 use tokio::main;
 use tokio::runtime::Runtime;
+use tokio::sync::oneshot;
 use sqlx::{pool, SqlitePool};
 use dotenv::dotenv;
 use std::env;
@@ -23,12 +24,12 @@ use std::process::{ExitStatus};
 use tokio::process::Command;
 use std::io;
 
-use app_state_derived_lenses::{username};
+use std::sync::Arc;
 
 use druid::widget::{Button, Flex, Label, Padding, TextBox, Scroll, List};
 use druid::{AppDelegate as OtherAppDelegate, AppLauncher, Data, Handled, Lens, Selector, WidgetExt, WindowDesc};
 
-#[derive(Clone, Data, Lens)]
+#[derive(Debug, Clone, Data, Lens)]
 struct AppState {
     name: String,
     username: String,
@@ -36,6 +37,7 @@ struct AppState {
     site: String,
     site_username: String,
     site_password: String,
+    credentials: Arc<Vec<Credential>>,
 }
 
 impl AppState {
@@ -47,6 +49,7 @@ impl AppState {
             site: "".into(),
             site_username: "".into(),
             site_password: "".into(),
+            credentials: Arc::new(Vec::new()),
         }
     }
 }
@@ -201,6 +204,7 @@ fn binary_to_image(image: &Vec<u8>, file_path: &str) -> io::Result<()> {
     Ok(())
 }   
 
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
@@ -256,8 +260,37 @@ fn login_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
     
 }
 
+use tokio::task;
+
+fn my_child(_username: String, pool: SqlitePool) {
+    let result = task::block_in_place (||  {
+
+        let task_result = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async{
+            println!("Username: {}", _username);
+            if let Err(e) = call_fingerprint_capture().await {
+                eprintln!("Failed to call fingerprint capture: {}", e);
+    
+                return;
+            }
+            
+            let image_path = Path::new("data/fingerprint_Input.bmp");
+            let binary_data = convert_image_to_binary(image_path.to_str().unwrap()).expect("Failed to convert image to binary");
+            
+            save_user(&pool, &_username, binary_data).await.expect("Failed to save user");
+            println!("User saved successfully");
+    
+        });
+    });
+    
+    
+}
 
 fn register_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
+
     let label = Label::new("Bioguard").padding(5.0);
 
     let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
@@ -268,19 +301,15 @@ fn register_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
         
         let pool = pool.clone();
         let _username = data.username.clone();
-        tokio::spawn(async move {
-            println!("Username: {}", _username);
-            if let Err(e) = call_fingerprint_capture().await {
-                eprintln!("Failed to call fingerprint capture: {}", e);
-                return;
-            }
-            
-            let image_path = Path::new("data/fingerprint_Input.bmp");
-            let binary_data = convert_image_to_binary(image_path.to_str().unwrap()).expect("Failed to convert image to binary");
-            
-            save_user(&pool, &_username, binary_data).await.expect("Failed to save user");
-            println!("User saved successfully");
-        });
+        let mut ret = 0;
+        my_child(_username.clone(), pool.clone());
+
+        /*if ret == 1 {
+            println!("Launch new windows");
+        }*/
+        println!("Registering user");
+
+        _ctx.new_window(WindowDesc::new(credentials_ui(pool.clone(), &_username)).title("credential"));
 
     });
     
@@ -296,15 +325,53 @@ fn register_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
     
 }
 
-fn credentials_ui(pool, SqlitePool, user_id: i64) -> impl druid::Widget<AppState> {
+fn credentials_ui(pool: SqlitePool, _username: &str) -> impl druid::Widget<AppState> {
     let label = Label::new("Your Credentials").padding(5.0);
 
     let site_input = TextBox::new().with_placeholder("Site").lens(AppState::site);
     let site_username_input = TextBox::new().with_placeholder("Site Username").lens(AppState::site_username);
     let site_password_input = TextBox::new().with_placeholder("Site Password").lens(AppState::site_password);
 
-    let save_button = Button::new("Add Credential").on_click(|_ctx, data: &mut AppState, _env| {
-        println!("TODO save credentials");
+    let user = _username.to_string();
+    let binding = pool.clone();
+    let cred = get_credentials(&binding, &user);
+
+
+    let mut list = List::new(|| {
+        Label::new(|cred: &Credential, _env: &_| format!("Site: {}, Username: {}, Password: {}", cred.site, cred.site_username, cred.site_password))
+    }).lens(AppState::credentials);
+
+    let user = _username.to_string();
+    let save_button = Button::new("Add Credential").on_click(move |_ctx, data: &mut AppState, _env| {
+
+        /*let user = user.clone();
+        let binding = pool.clone();
+        let site = data.site.clone();
+        let site_username = data.site_username.clone();
+        let site_password = data.site_password.clone();
+        let mut data_clone = data.clone();
+
+        tokio::spawn(async move {
+            match save_credentials(&binding, &user, &site, &site_username, &site_password).await {
+                Ok(_) => {
+                    println!("Credential saved successfully");
+                    match get_credentials(&binding, &user).await {
+                        Ok(creds) => {
+                            data_clone.credentials = creds.into();
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to get credentials: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to save credential: {}", e);
+                }
+            }
+        });*/
+
+        //TODO CALL SAVE CREDENTIALS FUNCTION
+        println!("credential saved successfully");
         /*let rt = Runtime::new().unwrap();
         let pool = rt.block_on(establish_connection());
         //let user_id: i64 = get_user(&pool, &data.username).expect("Failed to find user").id;
@@ -312,6 +379,8 @@ fn credentials_ui(pool, SqlitePool, user_id: i64) -> impl druid::Widget<AppState
         rt.block_on(save_credentials(&pool, 0/*user_id*/, &data.site, &data.site_username, &data.site_password))
         .expect("Failed to save credentials");*/
     });
+
+
     
     Flex::column()
     .with_child(label)
@@ -324,6 +393,7 @@ fn credentials_ui(pool, SqlitePool, user_id: i64) -> impl druid::Widget<AppState
     .with_spacer(20.0)
     .with_child(save_button)
     .with_spacer(20.0)    
+    .with_child(list)
 }
 
 struct AppDelegate {
@@ -338,7 +408,7 @@ impl AppDelegate {
     }
     
 }
-
+/*
 impl druid::AppDelegate<AppState> for AppDelegate {
     fn command(
         &mut self,
@@ -375,5 +445,5 @@ impl druid::AppDelegate<AppState> for AppDelegate {
         }
         Handled::No
     }
-}
+}*/
 

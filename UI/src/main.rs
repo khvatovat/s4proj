@@ -27,11 +27,12 @@ use std::io;
 
 use std::sync::Arc;
 
-use druid::widget::{Button, Flex, Label, Padding, TextBox, Scroll, List};
-use druid::{AppDelegate as OtherAppDelegate, AppLauncher, Data, Handled, Lens, Selector, WidgetExt, WindowDesc};
+use druid::widget::{Button, Flex, Label, Padding, TextBox, Scroll, List, SizedBox};
+use druid::{AppDelegate as OtherAppDelegate, AppLauncher, Data, Handled, Lens, Selector, WidgetExt, WindowDesc, Widget, Command as DruidCommand, Target, Color};
 
 #[derive(Debug, Clone, Data, Lens)]
 struct AppState {
+    view: ViewSelector,
     name: String,
     username: String,
     fingerprint_path: String,
@@ -51,17 +52,30 @@ impl AppState {
             site_username: "".into(),
             site_password: "".into(),
             credentials: Arc::new(Vec::new()),
+            view: ViewSelector::Login,
         }
     }
 }
 
+#[derive(Debug, Clone, Data, PartialEq)]
 enum ViewSelector {
     Login,
     Register,
     Credentials,
 }
 
+const CELL_WIDTH: f64 = 150.0;
+const CELL_HEIGHT: f64 = 50.0;
+const HEADER_COLOR: Color = Color::rgb8(0x2e, 0x2e, 0x2e);
+const TEXT_COLOR: Color = Color::WHITE;
+const CELL_BG_COLOR: Color = Color::rgb8(0x3c, 0x3c, 0x3c);
+
 const LOGIN: Selector = Selector::new("login");
+const SHOW_REGISTER: Selector = Selector::new("show-register");
+const SHOW_LOGIN: Selector = Selector::new("show-login");
+const SHOW_CREDENTIALS: Selector = Selector::new("show-credentials");
+const UPDATE_CREDENTIALS: Selector<Arc<Vec<Credential>>> = Selector::new("update-credentials");
+
 
 // Function to detect minutiae in the fingerprint image
 fn detect_minutiae(image: &Vec<Vec<u8>>) -> Vec<(usize, usize)> {
@@ -226,8 +240,8 @@ async fn main() {
 
     create_tables(&pool).await.expect("Failed to create tables");
     
-    let size = (400.0, 400.0);
-    let main_windows = WindowDesc::new(login_ui(pool.clone().into()))
+    let size = (800.0, 400.0);
+    let main_windows = WindowDesc::new(build_ui(pool.clone().into()))
     .title("Bioguard")
     .window_size(size);
     
@@ -237,6 +251,303 @@ async fn main() {
     //.delegate(AppDelegate::new(pool))
     .launch(initial_state)
     .expect("Failed to launch application");
+}
+
+fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
+
+
+    // LOGIN VIEW
+    let label_log = Label::new("Bioguard Login").padding(5.0);
+
+    let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
+
+    let pool_clone1 = Arc::clone(&pool);
+
+    let login_button = Button::new("Login").on_click(move |_ctx, data: &mut AppState, _env| {
+        let _username = data.username.clone();
+        my_child_login(_username.clone(), Arc::clone(&pool_clone1));
+        //TODO Handle login failure
+        data.view = ViewSelector::Credentials;
+
+        my_child_update(&pool_clone1, &_username, None, None, None, data);
+        //_ctx.submit_command(DruidCommand::new(SHOW_CREDENTIALS, (), Target::Global));
+        //_ctx.submit_command(LOGIN);
+        //TODO CALL VERIFICATION FUNCTION
+        //TODO LAUNCH CREDENTIALS UI
+    });
+
+    let pool_clone2 = Arc::clone(&pool);
+    let register_button_log = Button::new("Register").on_click({
+        move |_ctx, data: &mut AppState, _env| {
+            data.view = ViewSelector::Register;
+            //_ctx.submit_command(DruidCommand::new(SHOW_REGISTER, (), Target::Global));
+            }
+    });
+    
+    let login_view = Flex::column()
+    .with_child(label_log)
+    .with_spacer(20.0)
+    .with_child(username_input)
+    .with_spacer(20.0)
+    .with_child(login_button)
+    .with_spacer(20.0)
+    .with_child(register_button_log);
+
+
+
+    // REGISTER VIEW
+    let label_reg = Label::new("Bioguard Register").padding(5.0);
+    
+    let info = Label::new("To register your account with your fingerprint,\nPlease click on the Register button").padding(5.0);
+
+    let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
+    
+    let pool_clone3 = Arc::clone(&pool);
+    let register_button_reg = Button::new("Register").on_click(
+        move |_ctx, data: &mut AppState, _env| {
+            //_ctx.submit_command(DruidCommand::new(SHOW_REGISTER, (), Target::Global));
+        
+            //let pool_clone3 = Arc::clone(&pool);
+            let _username = data.username.clone();
+            let mut ret = 0;
+            my_child_register(_username.clone(), Arc::clone(&pool_clone3));
+
+            /*if ret == 1 {
+                println!("Launch new windows");
+            }*/
+            println!("Registering user");
+
+            data.view = ViewSelector::Credentials;
+
+            my_child_update(&pool_clone3, &_username, None, None, None, data);
+            }
+        );
+    
+    let register_view = Flex::column()
+    .with_child(label_reg)
+    .with_spacer(20.0)
+    .with_child(username_input)
+    .with_spacer(20.0)
+    .with_child(info)
+    .with_spacer(20.0)
+    .with_child(register_button_reg);
+
+
+    // CREDENTIALS VIEW
+    let label_cr = Label::new("Your Credentials").padding(5.0);
+
+    let site_input = TextBox::new().with_placeholder("Site").lens(AppState::site);
+    let site_username_input = TextBox::new().with_placeholder("Site Username").lens(AppState::site_username);
+    let site_password_input = TextBox::new().with_placeholder("Site Password").lens(AppState::site_password);
+
+    let save_button = Button::new("Add Credential").on_click({
+        let pool_clone = Arc::clone(&pool);
+        move |_ctx, data: &mut AppState, _env| {
+
+            let user = data.username.clone();
+            let binding = pool.clone();
+            let site = data.site.clone();
+            let site_username = data.site_username.clone();
+            let site_password = data.site_password.clone();
+
+            //let tx = _ctx.get_external_handle();
+            
+            my_child_update(&binding, &user, Some(&site), Some(&site_username), Some(&site_password), data);
+        }
+    });
+
+        //TODO CALL SAVE CREDENTIALS FUNCTION
+        println!("credential saved successfully");
+        /*let rt = Runtime::new().unwrap();
+        let pool = rt.block_on(establish_connection());
+        //let user_id: i64 = get_user(&pool, &data.username).expect("Failed to find user").id;
+
+        rt.block_on(save_credentials(&pool, 0/*user_id*/, &data.site, &data.site_username, &data.site_password))
+        .expect("Failed to save credentials");*/
+    
+
+   // Table headers
+   let headers = Flex::row()
+   .with_child(
+       SizedBox::new(
+           Label::new("Site")
+               .with_text_color(TEXT_COLOR)
+               .center()
+               .background(HEADER_COLOR)
+       )
+       .width(CELL_WIDTH)
+       .padding(5.0)
+       .border(Color::BLACK, 1.0),
+   )
+   .with_child(
+       SizedBox::new(
+           Label::new("Username")
+               .with_text_color(TEXT_COLOR)
+               .center()
+               .background(HEADER_COLOR)
+       )
+       .width(CELL_WIDTH)
+       .padding(5.0)
+       .border(Color::BLACK, 1.0),
+   )
+   .with_child(
+       SizedBox::new(
+           Label::new("Password")
+               .with_text_color(TEXT_COLOR)
+               .center()
+               .background(HEADER_COLOR)
+       )
+       .width(CELL_WIDTH)
+       .padding(5.0)
+       .border(Color::BLACK, 1.0),
+   );
+
+    // List of credentials
+    let credentials_list = List::new(|| {
+    Flex::row()
+        .with_child(
+            SizedBox::new(
+                Label::new(|cred: &Credential, _env: &_| format!("{}", cred.site))
+                    .with_text_color(TEXT_COLOR)
+                    .center()
+                    .background(CELL_BG_COLOR)
+            )
+            .width(CELL_WIDTH)
+            .padding(5.0)
+            .border(Color::BLACK, 1.0),
+        )
+        .with_child(
+            SizedBox::new(
+                Label::new(|cred: &Credential, _env: &_| format!("{}", cred.site_username))
+                    .with_text_color(TEXT_COLOR)
+                    .center()
+                    .background(CELL_BG_COLOR)
+            )
+            .width(CELL_WIDTH)
+            .padding(5.0)
+            .border(Color::BLACK, 1.0),
+        )
+        .with_child(
+            SizedBox::new(
+                Label::new(|cred: &Credential, _env: &_| format!("{}", cred.site_password))
+                    .with_text_color(TEXT_COLOR)
+                    .center()
+                    .background(CELL_BG_COLOR)
+            )
+            .width(CELL_WIDTH)
+            .padding(5.0)
+            .border(Color::BLACK, 1.0),
+        )
+    })
+    .lens(AppState::credentials);
+
+    // Table view
+    let table = Flex::column()
+    .with_child(headers)
+    .with_child(credentials_list);
+
+        
+    let credentials_view = Flex::row()
+    .with_child(
+        Flex::column()
+            .with_child(label_cr)
+            .with_spacer(20.0)
+            .with_child(site_input)
+            .with_spacer(20.0)
+            .with_child(site_username_input)
+            .with_spacer(20.0)
+            .with_child(site_password_input)
+            .with_spacer(20.0)
+            .with_child(save_button)
+            .with_spacer(20.0))
+    .with_child(table);
+
+
+    // MAIN VIEW
+    let main_view = Flex::column().with_child(druid::widget::Either::new(
+        |data: &AppState, _env| data.view == ViewSelector::Login,
+        login_view,
+        druid::widget::Either::new(
+            |data: &AppState, _env| data.view == ViewSelector::Register,
+            register_view,
+            credentials_view,
+        ),
+    ));
+
+    main_view
+}
+
+
+struct Delegate;
+
+impl druid::AppDelegate<AppState> for Delegate {
+    fn command(
+        &mut self,
+        _ctx: &mut druid::DelegateCtx,
+        _target: druid::Target,
+        cmd: &druid::Command,
+        data: &mut AppState,
+        _env: &druid::Env,
+    ) -> druid::Handled {
+        if cmd.is(SHOW_REGISTER) {
+            data.view = ViewSelector::Register;
+            return druid::Handled::Yes;
+        } else if cmd.is(SHOW_LOGIN) {
+            data.view = ViewSelector::Login;
+            return druid::Handled::Yes;
+        } else if cmd.is(SHOW_CREDENTIALS) {
+            data.view = ViewSelector::Credentials;
+            return druid::Handled::Yes;
+        } else if let Some(credentials) = cmd.get(UPDATE_CREDENTIALS) {
+            println!("Updating credentials");
+            // **Modified**: Update credentials in AppState
+            data.credentials = credentials.clone();
+            return druid::Handled::Yes;
+        }
+        druid::Handled::No
+    }
+}
+
+fn my_child_update(binding: &Arc<SqlitePool>, user: &str, site: Option<&str>, site_username: Option<&str>, site_password: Option<&str>, data: &mut AppState) {
+    let result = task::block_in_place (||  {
+
+        let task_result = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async{
+            
+            if site.unwrap_or("") == "" || site_username.unwrap_or("") == "" || site_password.unwrap_or("") == "" {
+                println!("Just updated, Please fill in all fields");
+                match get_credentials(&binding, &user).await {
+                    Ok(creds) => {
+                        data.credentials = Arc::new(creds);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to get credentials: {}", e);
+                    }
+                };
+                return;
+            }
+            match save_credentials(&binding, &user, &(site.unwrap()), &(site_username.unwrap()), &(site_password.unwrap())).await {
+                Ok(_) => {
+                    println!("Credential saved successfully");
+                    match get_credentials(&binding, &user).await {
+                        Ok(creds) => {
+                            data.credentials = Arc::new(creds);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to get credentials: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to save credential: {}", e);
+                }
+            }
+    
+        });
+    });
 }
 
 fn my_child_login(_username: String, pool: Arc<SqlitePool>) {
@@ -314,40 +625,8 @@ fn login_ui(pool: Arc<SqlitePool>) -> impl druid::Widget<AppState> {
     .with_child(register_button)
     
 }
-/*
-fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
-    let label = Label::new("Bioguard Login").padding(5.0);
 
-    let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
 
-    let pool_clone = Arc::clone(&pool);
-    let pool_clone2 = Arc::clone(&pool);
-
-    let login_button = Button::new("Login").on_click(move |_ctx, data: &mut AppState, _env| {
-        let _username = data.username.clone();
-        my_child_login(_username.clone(), Arc::clone(&pool_clone));
-        //TODO Handle login failure
-        _ctx.new_window(WindowDesc::new(credentials_ui(Arc::clone(&pool_clone2), &_username.clone())));
-        //_ctx.submit_command(LOGIN);
-        //TODO CALL VERIFICATION FUNCTION
-        //TODO LAUNCH CREDENTIALS UI
-    });
-
-    let pool_clone = Arc::clone(&pool);
-    let register_button = Button::new("Register").on_click(move |_ctx, data: &mut AppState, _env| {
-        _ctx.new_window(WindowDesc::new(register_ui(Arc::clone(&pool_clone))));
-    });
-    
-    let login_view = Flex::column()
-    .with_child(label)
-    .with_spacer(20.0)
-    .with_child(username_input)
-    .with_spacer(20.0)
-    .with_child(login_button)
-    .with_spacer(20.0)
-    .with_child(register_button)
-
-}*/
 
 fn my_child_register(_username: String, pool: Arc<SqlitePool>) {
     let result = task::block_in_place (||  {

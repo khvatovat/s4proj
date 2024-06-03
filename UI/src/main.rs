@@ -340,6 +340,8 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     let site_username_input = TextBox::new().with_placeholder("Site Username").lens(AppState::site_username);
     let site_password_input = TextBox::new().with_placeholder("Site Password").lens(AppState::site_password);
 
+    let pool_save  = Arc::clone(&pool);
+
     let save_button = Button::new("Add Credential").on_click({
         let pool_clone = Arc::clone(&pool);
         move |_ctx, data: &mut AppState, _env| {
@@ -356,15 +358,18 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
         }
     });
 
-        //TODO CALL SAVE CREDENTIALS FUNCTION
-        println!("credential saved successfully");
-        /*let rt = Runtime::new().unwrap();
-        let pool = rt.block_on(establish_connection());
-        //let user_id: i64 = get_user(&pool, &data.username).expect("Failed to find user").id;
+    let delete_credentials_button = Button::new("Delete Credential").on_click({
+        let pool_clone = Arc::clone(&pool_save);
+        move |_ctx, data: &mut AppState, _env| {
+            let user = data.username.clone();
+            let site = data.site.clone();
+            let binding = Arc::clone(&pool_clone);
 
-        rt.block_on(save_credentials(&pool, 0/*user_id*/, &data.site, &data.site_username, &data.site_password))
-        .expect("Failed to save credentials");*/
-    
+            my_child_delete(&binding, &user, Some(&site), data);
+
+            my_child_update(&binding, &user, None, None, None, data);
+        }
+    });    
 
    // Table headers
    let headers = Flex::row()
@@ -447,20 +452,27 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     .with_child(credentials_list);
 
         
-    let credentials_view = Flex::row()
+    let credentials_view = 
+    Flex::column()
+    .with_child(label_cr)
+    .with_spacer(40.0)
     .with_child(
-        Flex::column()
-            .with_child(label_cr)
-            .with_spacer(20.0)
-            .with_child(site_input)
-            .with_spacer(20.0)
-            .with_child(site_username_input)
-            .with_spacer(20.0)
-            .with_child(site_password_input)
-            .with_spacer(20.0)
-            .with_child(save_button)
-            .with_spacer(20.0))
-    .with_child(table);
+        Flex::row()
+            .with_child(
+                Flex::column()
+                .with_child(site_input)
+                .with_spacer(20.0)
+                .with_child(site_username_input)
+                .with_spacer(20.0)
+                .with_child(site_password_input)
+                .with_spacer(20.0)
+                .with_child(save_button)
+                .with_spacer(20.0)
+                .with_child(delete_credentials_button)
+            )
+            .with_spacer(40.0)
+            .with_child(table)
+    );
 
 
     // MAIN VIEW
@@ -507,6 +519,20 @@ impl druid::AppDelegate<AppState> for Delegate {
         druid::Handled::No
     }
 }
+fn my_child_delete(binding: &Arc<SqlitePool>, user: &str, site: Option<&str>, data: &mut AppState) {
+    let result = task::block_in_place (||  {
+
+        let task_result = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async{    
+            delete_credentials(&binding, &user, &(site.unwrap())).await.expect("Failed to delete credential");
+        });
+    });
+}
+
+
 
 fn my_child_update(binding: &Arc<SqlitePool>, user: &str, site: Option<&str>, site_username: Option<&str>, site_password: Option<&str>, data: &mut AppState) {
     let result = task::block_in_place (||  {

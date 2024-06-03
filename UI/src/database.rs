@@ -98,3 +98,17 @@ pub async fn get_credentials(pool: &SqlitePool, username: &str) -> Result<Vec<Cr
 
     Ok(credentials)
 }
+
+pub async fn delete_credentials(pool: &SqlitePool, username: &str, site: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "
+        DELETE FROM credentials WHERE username = ? AND site = ?
+        "
+    )
+    .bind(username)
+    .bind(site)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(())
+}

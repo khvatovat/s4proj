@@ -142,7 +142,7 @@ HRESULT CaptureSample()
   }
 
   // Capture a biometric sample.
-  std::cout << "Calling WinBioCaptureSample - Swipe sensor...\nPlease put your finger on the sensor\n";
+  std::cout << "Welcome in the fingerprint capture process.\nPlease put your finger on the sensor...\n";
 
   hr = WinBioCaptureSample(
     sessionHandle,
@@ -176,8 +176,8 @@ HRESULT CaptureSample()
     return hr;
   }
 
-  std::cout << "Swipe processed - Unit ID: " << unitId << "\n";
-  std::cout << "Captured " << sampleSize << " bytes.\n";
+  //std::cout << "Swipe processed - Unit ID: " << unitId << "\n";
+  //std::cout << "Captured " << sampleSize << " bytes.\n";
 
   if(sample != NULL)
   {
@@ -188,7 +188,7 @@ HRESULT CaptureSample()
     DWORD width = AnsiBdbRecord->HorizontalLineLength; // Width of image in pixels
     DWORD height = AnsiBdbRecord->VerticalLineLength; // Height of image in pixels
 
-    std::cout << "Image resolution: " << width << " x " << height << "\n";
+    //std::cout << "Image resolution: " << width << " x " << height << "\n";
 
     PBYTE firstPixel = (PBYTE)((PBYTE)AnsiBdbRecord) + sizeof(WINBIO_BDB_ANSI_381_RECORD);
 
@@ -196,16 +196,14 @@ HRESULT CaptureSample()
     std::vector<uint8> data(width * height);
     memcpy(&data[0], firstPixel, width * height);
 
-    SYSTEMTIME st;
-    GetSystemTime(&st);
-    std::string s = std::to_string(st.wYear) + "." + std::to_string(st.wMonth) + "." + std::to_string(st.wDay) + "." + std::to_string(st.wHour) + "." + std::to_string(st.wMinute) + "." + std::to_string(st.wSecond) + "." + std::to_string(st.wMilliseconds);
-    std::string bmpFile = "data/fingerPrint_"+ s + ".bmp";
+    std::string bmpFile = "data/fingerPrint_input.bmp";
 
     BmpSetImageData(&bmp, data, width, height);
     BmpSave(&bmp, bmpFile);
     //ShellExecuteA(NULL, NULL, bmpFile.c_str(), NULL, NULL, SW_SHOWNORMAL);
 
-    std::cout << "Fingerprint Captured!\n\n";
+    Sleep(300);
+    std::cout << "Fingerprint Captured.\nThank you!\n";
 
     CFile raw("rawData.bin");
     raw.write(&data[0], data.size());
@@ -226,6 +224,7 @@ HRESULT CaptureSample()
 
 int main()
 {
-     CreateDirectoryA("data", NULL);
-    while(!FAILED(CaptureSample()));
+    CreateDirectoryA("data", NULL);
+    CaptureSample();
+    Sleep(2500);
 }

@@ -1,0 +1,100 @@
+body {
+    font-family: 'Georgia', serif;
+    margin: 0;
+    padding: 0;
+    background-color: #333;
+    color: #f4f4f4;
+}
+
+header {
+    background-color: #222;
+    color: #f4f4f4;
+    text-align: center;
+    padding: 1rem 0;
+}
+
+header img {
+    max-width: 100px;
+    height: auto;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 2.5em;
+}
+
+header h2 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #ff4500; 
+}
+body img {
+    display: block;
+    margin: 0 auto;
+    max-width: 400px; /* Adjust the width as needed */
+    height: auto;
+}
+nav ul {
+    list-style: none;
+    padding: 0;
+    text-align: center;
+    background-color: #444; 
+}
+
+nav ul li {
+    display: inline;
+    margin: 0 15px;
+}
+
+nav ul li a {
+    text-decoration: none;
+    color: #f4f4f4;
+    font-weight: bold;
+}
+
+nav a:hover {
+    color: #ff4500;
+}
+
+section {
+    margin: 20px;
+    padding: 20px;
+    background-color: #222;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+section h2 {
+    font-size: 1.5em;
+    background-color: #444;
+    color: #ff4500; 
+    padding: 10px;
+    border-radius: 5px;
+}
+
+nav a.home {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #fff; 
+    color: #333;
+    text-decoration: none;
+    border-radius: 5px;
+    font-weight: bold;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+nav a.home:hover {
+    background-color: #ff4500; 
+    color: #fff; 
+}
+
+a.download, a.other-link {
+    color: #fff;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+a.download:hover, a.other-link:hover {
+    color: #ff4500;
+}

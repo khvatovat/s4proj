@@ -2,19 +2,20 @@ mod extractor;
 use crate::extractor::extractor::extract;
 fn main() {
     
-    let image = vec![
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 1, 1, 0, 1, 1, 1, 0, 1, 0],
-        vec![0, 1, 0, 0, 0, 0, 1, 0, 0, 0],
-        vec![0, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
-        vec![0, 1, 1, 1, 0, 1, 0, 1, 1, 0],
-        vec![0, 1, 0, 0, 1, 1, 0, 1, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    ];
-    print_image(&image);
+    //let image = vec![
+    //    vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //    vec![0, 1, 1, 0, 1, 1, 1, 0, 1, 0],
+    //    vec![0, 1, 0, 0, 0, 0, 1, 0, 0, 0],
+    //    vec![0, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+    //    vec![0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+    //    vec![0, 1, 1, 1, 0, 1, 0, 1, 1, 0],
+    //    vec![0, 1, 0, 0, 1, 1, 0, 1, 0, 0],
+    //    vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    //];
+    //print_image(&image);
 
-    let result_image = extract(&image);
+
+    let result_image = extract();
 
     println!("Resulting image after minutia extraction:");
     print_image(&result_image);

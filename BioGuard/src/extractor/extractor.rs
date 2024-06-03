@@ -19,166 +19,197 @@ use std::path::Path;
 // Histogram equalization
 fn histogram_equalization(image_path: &str) -> Vec<Vec<u8>> {
     let img = image::open(&Path::new(image_path)).unwrap().to_luma8();
-    let mut image = vec![vec![0u8; img.width() as usize]; img.height() as usize];
+    let mut histogram = [0u32; 256];
+    let mut cdf = [0u32; 256];
+    let mut res = vec![vec![0u8; img.width() as usize]; img.height() as usize];
+
+    for pixel in img.pixels() {
+        histogram[pixel[0] as usize] += 1;
+    }
+
+    // Calculate the cumulative distribution function (CDF)
+    cdf[0] = histogram[0];
+    for i in 1..256 {
+        cdf[i] = cdf[i - 1] + histogram[i];
+    }
+
+    //let mut image = vec![vec![0u8; img.width() as usize]; img.height() as usize];
 
     let n = img.width() * img.height();
     let scale = 255.0 / (n as f32);
-    for (y, row) in image.iter_mut().enumerate() {
+    //for (y, row) in image.iter_mut().enumerate() {
+    for (y, row) in res.iter_mut().enumerate() {
         for (x, pixel) in row.iter_mut().enumerate() {
             let orig = img.get_pixel(x as u32, y as u32)[0];
             *pixel = (cdf[orig as usize] as f32 * scale).round() as u8;
         }
     }
-
-    // Calculate histogram
-    let mut histogram = [0u8; 256];
-    for Sub in image {
-        for pixel in Sub {
-            let intensity = pixel as usize;
-            histogram[intensity] += 1;
-	}
-    }
-
-    // Calculate cumulative distribution function (CDF)
-    let mut cdf = [0u8; 256];
-    let mut cumulative_sum = 0;
-    for (intensity, &count) in histogram.iter().enumerate() {
-        cumulative_sum += count;
-        cdf[intensity] = cumulative_sum;
-    }
-
-    // Normalize CDF
-    let total_pixels = image.len() * image[0].len();
-    let cdf_normalized: Vec<u8> = cdf.iter().map(|&value| ((value as f32 / total_pixels as f32) * 255.0) as u8).collect();
-
-    // Apply histogram equalization
-    let mut equalized_image = Vec::new();
-    let mut sub = Vec::new();
-    for i in 0..image.len() {
-        sub.clear();
-        for j in 0..image[0].len() {
-            let intensity = image[i][j] as usize;
-            let equalized_intensity = cdf_normalized[intensity] as u8;
-            sub.push(equalized_intensity);
-        }
-        equalized_image.push(sub);
-    }
-
-    equalized_image
+    res
 }
 
-// subfunction of black and white
-fn otsu_threshold(image: Vec<Vec<u8>>) -> u8 {
-    let total_pixels = (image.len() * image[0].len()) as u32;
-    let hist = calculate_histogram(image);
-    let mut sum = 0.0;
-
-    for (i, &count) in hist.iter().enumerate() {
-        sum += i as f64 * count as f64;
-    }
-
-    let mut sum_b = 0.0;
-    let mut w_b = 0;
-    let mut w_f;
-
-    let mut var_max = 0.0;
-    let mut threshold = 0;
-
-    for (i, &count) in hist.iter().enumerate() {
-        w_b += count;
-        if w_b == 0 {
-            continue;
-        }
-        w_f = total_pixels - w_b;
-        if w_f == 0 {
-            break;
-        }
-        sum_b += i as f64 * count as f64;
-        let mean_b = sum_b / w_b as f64;
-        let mean_f = (sum - sum_b) / w_f as f64;
-
-        let var_between = w_b as f64 * w_f as f64 * (mean_b - mean_f) * (mean_b - mean_f);
-
-        if var_between > var_max {
-            var_max = var_between;
-            threshold = i;
+// To Black&Whrite
+fn binarization(input: Vec<Vec<u8>>, threshold: u8) -> Vec<Vec<u8>> {
+    let mut res = vec![vec![0u8; input[0].len()]; input.len()];
+    for (y, row) in input.iter().enumerate() {
+        for (x, &pixel) in row.iter().enumerate() {
+            res[y][x] = if pixel > threshold { 1 } else { 0 };
         }
     }
-
-    threshold as u8
+    res
 }
+///
+/// MATIS' PART
+   // // Calculate histogram
+   // let mut histogram = [0u8; 256];
+   // for Sub in image {
+   //     for pixel in Sub {
+   //         let intensity = pixel as usize;
+   //         histogram[intensity] += 1;
+   //     }
+   // }
 
-// subfunction of black and white
-fn calculate_histogram(image: Vec<Vec<u8>>) -> [u32; 256] {
-    let mut histogram = [0u32; 256];
+   // // Calculate cumulative distribution function (CDF)
+   // let mut cdf = [0u8; 256];
+   // let mut cumulative_sum = 0;
+   // for (intensity, &count) in histogram.iter().enumerate() {
+   //     cumulative_sum += count;
+   //     cdf[intensity] = cumulative_sum;
+   // }
 
-    for Sub in image {
-        for pixel in Sub {
-            let intensity = pixel as usize;
-            histogram[intensity] += 1;
-	}
-    }
+   // // Normalize CDF
+   // let total_pixels = image.len() * image[0].len();
+   // let cdf_normalized: Vec<u8> = cdf.iter().map(|&value| ((value as f32 / total_pixels as f32) * 255.0) as u8).collect();
 
-    histogram
-}
+   // // Apply histogram equalization
+   // let mut equalized_image = Vec::new();
+   // let mut sub = Vec::new();
+   // for i in 0..image.len() {
+   //     sub.clear();
+   //     for j in 0..image[0].len() {
+   //         let intensity = image[i][j] as usize;
+   //         let equalized_intensity = cdf_normalized[intensity] as u8;
+   //         sub.push(equalized_intensity);
+   //     }
+   //     equalized_image.push(sub);
+   // }
 
-// Black and White
-fn binarize_image(image: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
-    let threshold = otsu_threshold(image);
-    let mut binary_image = Vec::new();
-    let mut sub = Vec::new();
-    for i in 0..image.len() {
-        sub.clear();
-        for j in 0..image[0].len() {
-            if image[i][j] > threshold {
-                sub.push(255);
-            }
-            else {
-               sub.push(0);
-            }
-        }
-        binary_image.push(sub);
-    }
+   // equalized_image
 
 
-    binary_image
-}
+//// subfunction of black and white
+//fn otsu_threshold(image: Vec<Vec<u8>>) -> u8 {
+//    let total_pixels = (image.len() * image[0].len()) as u32;
+//    let hist = calculate_histogram(image);
+//    let mut sum = 0.0;
+//
+//    for (i, &count) in hist.iter().enumerate() {
+//        sum += i as f64 * count as f64;
+//    }
+//
+//    let mut sum_b = 0.0;
+//    let mut w_b = 0;
+//    let mut w_f;
+//
+//    let mut var_max = 0.0;
+//    let mut threshold = 0;
+//
+//    for (i, &count) in hist.iter().enumerate() {
+//        w_b += count;
+//        if w_b == 0 {
+//            continue;
+//        }
+//        w_f = total_pixels - w_b;
+//        if w_f == 0 {
+//            break;
+//        }
+//        sum_b += i as f64 * count as f64;
+//        let mean_b = sum_b / w_b as f64;
+//        let mean_f = (sum - sum_b) / w_f as f64;
+//
+//        let var_between = w_b as f64 * w_f as f64 * (mean_b - mean_f) * (mean_b - mean_f);
+//
+//        if var_between > var_max {
+//            var_max = var_between;
+//            threshold = i;
+//        }
+//    }
+//
+//    threshold as u8
+//}
+//
+//// subfunction of black and white
+//fn calculate_histogram(image: Vec<Vec<u8>>) -> [u32; 256] {
+//    let mut histogram = [0u32; 256];
+//
+//    for Sub in image {
+//        for pixel in Sub {
+//            let intensity = pixel as usize;
+//            histogram[intensity] += 1;
+//	}
+//    }
+//
+//    histogram
+//}
+//
+//// Black and White
+//fn binarize_image(image: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+//    let threshold = otsu_threshold(image);
+//    let mut binary_image = Vec::new();
+//    let mut sub = Vec::new();
+//    for i in 0..image.len() {
+//        sub.clear();
+//        for j in 0..image[0].len() {
+//            if image[i][j] > threshold {
+//                sub.push(255);
+//            }
+//            else {
+//               sub.push(0);
+//            }
+//        }
+//        binary_image.push(sub);
+//    }
+//
+//
+//    binary_image
+//}
+//
+//// Fourier
+//// Function to perform Fourier transformation on a grayscale image
+//fn fourier_transform(image: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+//    // Perform Fourier transform (forward)
+//    let mut freq_domain = rustfft::FftPlanner::new().plan_fft_forward(image.len() as usize * image[0].len() as usize);
+//    let mut complex_image: Vec<Complex<f64>> = Vec::new();
+//    for sub in image {
+//        for pixel in sub {
+//            complex_image.push(Complex::new(pixel as f64, 0.0))
+//        }
+//    }
+//    freq_domain.process(&mut complex_image);
+//
+//    // Perform inverse Fourier transform
+//    let mut inv_freq_domain = rustfft::FftPlanner::new().plan_fft_inverse(image.len() as usize * image[0].len() as usize);
+//    inv_freq_domain.process(&mut complex_image);
+//    
+//    // Normalize and create the output image
+//    let max_intensity = complex_image.iter().map(|c| c.norm()).fold(0.0, f64::max);
+//    let scaled_image: Vec<u8> = complex_image.iter().map(|c| (255.0 * c.norm() / max_intensity) as u8).collect();
+//    
+//    let mut dynamicimage = Vec::new();
+//    let mut sub = Vec::new();
+//    let mut it = scaled_image.iter();
+//    let l = image[0].len();
+//    for i in 0..image.len() {
+//        sub.clear();
+//        for j in 0..l {
+//            sub.push(it.next().unwrap());
+//        }
+//        dynamicimage.push(sub);
+//    }
+//
+//    dynamicimage
+///END OF MATIS' PART
+///
 
-// Fourier
-// Function to perform Fourier transformation on a grayscale image
-fn fourier_transform(image: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
-    // Perform Fourier transform (forward)
-    let mut freq_domain = rustfft::FftPlanner::new().plan_fft_forward(image.len() as usize * image[0].len() as usize);
-    let mut complex_image: Vec<Complex<f64>> = Vec::new();
-    for sub in image {
-        for pixel in sub {
-            complex_image.push(Complex::new(pixel as f64, 0.0))
-        }
-    }
-    freq_domain.process(&mut complex_image);
-
-    // Perform inverse Fourier transform
-    let mut inv_freq_domain = rustfft::FftPlanner::new().plan_fft_inverse(image.len() as usize * image[0].len() as usize);
-    inv_freq_domain.process(&mut complex_image);
-    
-    // Normalize and create the output image
-    let max_intensity = complex_image.iter().map(|c| c.norm()).fold(0.0, f64::max);
-    let scaled_image: Vec<u8> = complex_image.iter().map(|c| (255.0 * c.norm() / max_intensity) as u8).collect();
-    
-    let mut dynamicimage = Vec::new();
-    let mut sub = Vec::new();
-    let mut it = scaled_image.iter();
-    let l = image[0].len();
-    for i in 0..image.len() {
-        sub.clear();
-        for j in 0..l {
-            sub.push(it.next().unwrap());
-        }
-        dynamicimage.push(sub);
-    }
-
-    dynamicimage
-}
 ///
 ///END OF PREPROCESSING BLOCK
 
@@ -411,6 +442,7 @@ fn mark_minutia(image: &Vec<Vec<u8>>) -> Vec<Minutia> {
             }
         }
     }
+    //println!("size: {}, {}", image.len(), image[0].len());
     res
 }
 
@@ -489,16 +521,17 @@ fn remove_false_minutia(mut image: Vec<Vec<u8>>, minutia: Vec<Minutia>, distance
 
 
 pub fn extract() -> Vec<Vec<u8>> {
-    call_fingerprint_capture(); //TODO: add an import for this depending on where you have the
+    //call_fingerprint_capture(); //TODO: add an import for this depending on where you have the
                                 //function, the project must have only one main.rs
-    let image_path = "fingerPrint_input.bmp"; //TODO: correct the filename
+    let image_path = "input.bmp"; //TODO: correct the filename
     let hist = histogram_equalization(image_path);
     let bin = binarization(hist.clone(), 128);
     let thin = thin(&bin);
     let minutia = mark_minutia(&thin);
     let res_image = remove_false_minutia(thin, minutia, 10.0, 0.5);
-    let result = match_test(reference, res_image);//TODO: get the referense matrix, i am not sure how it
+    //let result = match_test(reference, res_image);//TODO: get the referense matrix, i am not sure how it
                                                   //works with the db
-    result
+    //result
+    res_image
 }
 

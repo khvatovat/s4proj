@@ -523,7 +523,7 @@ fn remove_false_minutia(mut image: Vec<Vec<u8>>, minutia: Vec<Minutia>, distance
 pub fn extract() -> Vec<Vec<u8>> {
     //call_fingerprint_capture(); //TODO: add an import for this depending on where you have the
                                 //function, the project must have only one main.rs
-    let image_path = "input.bmp"; //TODO: correct the filename
+    let image_path = "src/input.bmp"; //TODO: correct the filename
     let hist = histogram_equalization(image_path);
     let bin = binarization(hist.clone(), 128);
     let thin = thin(&bin);

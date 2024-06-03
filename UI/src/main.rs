@@ -7,6 +7,7 @@ use database::*;
 use tokio::main;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
+use tokio::task;
 use sqlx::{pool, SqlitePool};
 use dotenv::dotenv;
 use std::env;
@@ -52,6 +53,12 @@ impl AppState {
             credentials: Arc::new(Vec::new()),
         }
     }
+}
+
+enum ViewSelector {
+    Login,
+    Register,
+    Credentials,
 }
 
 const LOGIN: Selector = Selector::new("login");
@@ -220,7 +227,7 @@ async fn main() {
     create_tables(&pool).await.expect("Failed to create tables");
     
     let size = (400.0, 400.0);
-    let main_windows = WindowDesc::new(login_ui(pool.clone()))
+    let main_windows = WindowDesc::new(login_ui(pool.clone().into()))
     .title("Bioguard")
     .window_size(size);
     
@@ -232,21 +239,69 @@ async fn main() {
     .expect("Failed to launch application");
 }
 
+fn my_child_login(_username: String, pool: Arc<SqlitePool>) {
+    let result = task::block_in_place (||  {
 
-fn login_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
+        let task_result = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async{
+            println!("Username: {}", _username);
+            if let Err(e) = call_fingerprint_capture().await {
+                eprintln!("Failed to call fingerprint capture: {}", e);
+    
+                return;
+            }
+
+            let user = get_user(&pool, &_username).await.expect("Failed to find user");
+
+            if user.is_some() {
+
+                let image_login = binary_to_image(&user.unwrap().fingerprint_image, "data/fingerprint_Login.bmp").expect("Failed to convert image to binary");
+
+                //TODO  :
+                ///     -LOAD FINGERPRINT IMAGE
+                //      -PREPROCESS
+                ///     -EXTRACT MINUTIAE
+                ///     -MATCH MINUTIAE
+
+                //let matches = minutiae_matching(&image_login, &attempt_image);
+                if true {//matches.len() > 11 {
+                    println!("Fingerprints match!");
+                } else {
+                    println!("Fingerprints do not match!");
+                }
+            } else {
+                println!("User not found");
+            }
+            println!("User successfully logged in");
+    
+        });
+    });
+}
+
+fn login_ui(pool: Arc<SqlitePool>) -> impl druid::Widget<AppState> {
     let label = Label::new("Bioguard Login").padding(5.0);
 
     let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
 
-    let login_button = Button::new("Login").on_click(|_ctx, data: &mut AppState, _env| {
-        call_fingerprint_capture();
+    let pool_clone = Arc::clone(&pool);
+    let pool_clone2 = Arc::clone(&pool);
+
+    let login_button = Button::new("Login").on_click(move |_ctx, data: &mut AppState, _env| {
+        let _username = data.username.clone();
+        my_child_login(_username.clone(), Arc::clone(&pool_clone));
+        //TODO Handle login failure
+        _ctx.new_window(WindowDesc::new(credentials_ui(Arc::clone(&pool_clone2), &_username.clone())));
         //_ctx.submit_command(LOGIN);
         //TODO CALL VERIFICATION FUNCTION
         //TODO LAUNCH CREDENTIALS UI
     });
 
+    let pool_clone = Arc::clone(&pool);
     let register_button = Button::new("Register").on_click(move |_ctx, data: &mut AppState, _env| {
-        _ctx.new_window(WindowDesc::new(register_ui(pool.clone())).title("Register"));
+        _ctx.new_window(WindowDesc::new(register_ui(Arc::clone(&pool_clone))));
     });
     
     Flex::column()
@@ -259,10 +314,42 @@ fn login_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
     .with_child(register_button)
     
 }
+/*
+fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
+    let label = Label::new("Bioguard Login").padding(5.0);
 
-use tokio::task;
+    let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
 
-fn my_child(_username: String, pool: SqlitePool) {
+    let pool_clone = Arc::clone(&pool);
+    let pool_clone2 = Arc::clone(&pool);
+
+    let login_button = Button::new("Login").on_click(move |_ctx, data: &mut AppState, _env| {
+        let _username = data.username.clone();
+        my_child_login(_username.clone(), Arc::clone(&pool_clone));
+        //TODO Handle login failure
+        _ctx.new_window(WindowDesc::new(credentials_ui(Arc::clone(&pool_clone2), &_username.clone())));
+        //_ctx.submit_command(LOGIN);
+        //TODO CALL VERIFICATION FUNCTION
+        //TODO LAUNCH CREDENTIALS UI
+    });
+
+    let pool_clone = Arc::clone(&pool);
+    let register_button = Button::new("Register").on_click(move |_ctx, data: &mut AppState, _env| {
+        _ctx.new_window(WindowDesc::new(register_ui(Arc::clone(&pool_clone))));
+    });
+    
+    let login_view = Flex::column()
+    .with_child(label)
+    .with_spacer(20.0)
+    .with_child(username_input)
+    .with_spacer(20.0)
+    .with_child(login_button)
+    .with_spacer(20.0)
+    .with_child(register_button)
+
+}*/
+
+fn my_child_register(_username: String, pool: Arc<SqlitePool>) {
     let result = task::block_in_place (||  {
 
         let task_result = tokio::runtime::Builder::new_current_thread()
@@ -289,7 +376,7 @@ fn my_child(_username: String, pool: SqlitePool) {
     
 }
 
-fn register_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
+fn register_ui(pool: Arc<SqlitePool>) -> impl druid::Widget<AppState> {
 
     let label = Label::new("Bioguard").padding(5.0);
 
@@ -299,17 +386,17 @@ fn register_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
     
     let register_button = Button::new("Register").on_click(move |_ctx, data: &mut AppState, _env| {
         
-        let pool = pool.clone();
+        let pool = Arc::clone(&pool);
         let _username = data.username.clone();
         let mut ret = 0;
-        my_child(_username.clone(), pool.clone());
+        my_child_register(_username.clone(), Arc::clone(&pool));
 
         /*if ret == 1 {
             println!("Launch new windows");
         }*/
         println!("Registering user");
 
-        _ctx.new_window(WindowDesc::new(credentials_ui(pool.clone(), &_username)).title("credential"));
+        _ctx.new_window(WindowDesc::new(credentials_ui(Arc::clone(&pool), &_username)));
 
     });
     
@@ -325,7 +412,7 @@ fn register_ui(pool: SqlitePool) -> impl druid::Widget<AppState> {
     
 }
 
-fn credentials_ui(pool: SqlitePool, _username: &str) -> impl druid::Widget<AppState> {
+fn credentials_ui(pool: Arc<SqlitePool>, _username: &str) -> impl druid::Widget<AppState> {
     let label = Label::new("Your Credentials").padding(5.0);
 
     let site_input = TextBox::new().with_placeholder("Site").lens(AppState::site);
@@ -344,7 +431,7 @@ fn credentials_ui(pool: SqlitePool, _username: &str) -> impl druid::Widget<AppSt
     let user = _username.to_string();
     let save_button = Button::new("Add Credential").on_click(move |_ctx, data: &mut AppState, _env| {
 
-        /*let user = user.clone();
+        let user = user.clone();
         let binding = pool.clone();
         let site = data.site.clone();
         let site_username = data.site_username.clone();
@@ -368,7 +455,7 @@ fn credentials_ui(pool: SqlitePool, _username: &str) -> impl druid::Widget<AppSt
                     eprintln!("Failed to save credential: {}", e);
                 }
             }
-        });*/
+        });
 
         //TODO CALL SAVE CREDENTIALS FUNCTION
         println!("credential saved successfully");

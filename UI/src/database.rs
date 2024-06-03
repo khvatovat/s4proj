@@ -69,7 +69,7 @@ pub async fn save_credentials(pool: &SqlitePool, username: &str, site: &str, sit
 }
 
 pub async fn get_user(pool: &SqlitePool, username: &str) -> Result<Option<User>, sqlx::Error> {
-    match sqlx::query("SELECT id, username, fingerprint FROM users WHERE username = ?")
+    match sqlx::query("SELECT id, username, fingerprint_image FROM users WHERE username = ?")
         .bind(username)
         .fetch_optional(pool)
         .await? {

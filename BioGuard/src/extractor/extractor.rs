@@ -11,7 +11,54 @@ pub struct Minutia {
     minutia_type: MinutiaType,
 }
 
+use std::path::Path;
 
+
+///PREPROCESSING BLOCK
+///
+// Histogram equalization
+fn histogram_equalization(image_path: &str) -> Vec<Vec<u8>> {
+    let img = image::open(&Path::new(image_path)).unwrap().to_luma8();
+    let mut histogram = [0u32; 256];
+    let mut cdf = [0u32; 256];
+    let mut res = vec![vec![0u8; img.width() as usize]; img.height() as usize];
+
+    for pixel in img.pixels() {
+        histogram[pixel[0] as usize] += 1;
+    }
+
+    // Calculate the cumulative distribution function (CDF)
+    cdf[0] = histogram[0];
+    for i in 1..256 {
+        cdf[i] = cdf[i - 1] + histogram[i];
+    }
+
+    let n = img.width() * img.height();
+    let scale = 255.0 / (n as f32);
+    for (y, row) in res.iter_mut().enumerate() {
+        for (x, pixel) in row.iter_mut().enumerate() {
+            let orig = img.get_pixel(x as u32, y as u32)[0];
+            *pixel = (cdf[orig as usize] as f32 * scale).round() as u8;
+        }
+    }
+    res
+}
+
+// To Black&Whrite
+fn binarization(input: Vec<Vec<u8>>, threshold: u8) -> Vec<Vec<u8>> {
+    let mut res = vec![vec![0u8; input[0].len()]; input.len()];
+    for (y, row) in input.iter().enumerate() {
+        for (x, &pixel) in row.iter().enumerate() {
+            res[y][x] = if pixel > threshold { 1 } else { 0 };
+        }
+    }
+    res
+}
+///
+///END OF PREPROCESSING BLOCK
+
+///EXTRACTION BLOCK
+///
 //Implements thhe Zhang-Suen thinning algorithm (https://dl.acm.org/doi/epdf/10.1145/357994.358023)
 //and applies the 3 morphological operations after the thinngin
 fn thin(image: &Vec<Vec<u8>>) -> Vec<Vec<u8>> {
@@ -206,7 +253,12 @@ fn is_spike(image: &Vec<Vec<u8>>, x: usize, y: usize) -> bool {
     let neighbors = get_neighbors(image, x, y);
     neighbors.iter().sum::<u8>() == 1
 }
+///
+///END OF EXTRACTION BLOCK
 
+
+///POSTPROCESSING BLOCK
+///
 //Marks each valuable pixel (not a regular ridge) as either an ending, or a bifurcation point.
 //Stores this information in a structure and returns a vector of valuale minutia
 fn mark_minutia(image: &Vec<Vec<u8>>) -> Vec<Minutia> {
@@ -305,14 +357,23 @@ fn remove_false_minutia(mut image: Vec<Vec<u8>>, minutia: Vec<Minutia>, distance
 
     image
 }
+///
+///END OF POSTPROCESSING BLOCK
 
-pub fn extract(image: &Vec<Vec<u8>>) -> Vec<Vec<u8>> {
-    let thinned_image = thin(image);
-    let minutia = mark_minutia(&thinned_image);
-    let res_image = remove_false_minutia(thinned_image, minutia, 10.0, 0.5);
-    res_image
+
+
+
+pub fn extract() -> Vec<Vec<u8>> {
+    call_fingerprint_capture(); //TODO: add an import for this depending on where you have the
+                                //function, the project must have only one main.rs
+    let image_path = "fingerPrint_input.bmp"; //TODO: correct the filename
+    let hist = histogram_equalization(image_path);
+    let bin = binarization(hist.clone(), 128);
+    let thin = thin(&bin);
+    let minutia = mark_minutia(&thin);
+    let res_image = remove_false_minutia(thin, minutia, 10.0, 0.5);
+    let result = match_test(reference, res_image);//TODO: get the referense matrix, i am not sure how it
+                                                  //works with the db
+    result
 }
 
-//pub fn run() -> bool {
-//    call_fingerprint_capture();
-//    let image = prep()

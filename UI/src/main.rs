@@ -2,6 +2,9 @@
 extern crate sqlx;
 extern crate dotenv;
 
+mod extractor;
+use crate::extractor::*;
+
 use std::io::Write;
 use database::*;
 use tokio::main;
@@ -15,6 +18,8 @@ use std::fs::File;
 use std::future::IntoFuture;
 use std::io::Read;
 use std::path::Path;
+
+use image::{load_from_memory, ImageError, DynamicImage, ImageFormat};
 
 mod models;
 mod database;
@@ -105,8 +110,11 @@ fn detect_minutiae(image: &Vec<Vec<u8>>) -> Vec<(usize, usize)> {
 
 // Function to perform minutiae matching between two fingerprint images
 fn minutiae_matching(image1: &Vec<Vec<u8>>, image2: &Vec<Vec<u8>>) -> Vec<(usize, usize)> {
+    println!("Matching minutiae1 {}, len[0] = {}", image1.len(), image1[0].len());
     let minutiae1 = detect_minutiae(image1);
+    println!("Minutiae1 done");
     let minutiae2 = detect_minutiae(image2);
+    println!("Minutiae2 done");
 
     // Simple matching algorithm: matching minutiae if they are close enough
     let mut matches = Vec::new();
@@ -122,76 +130,15 @@ fn minutiae_matching(image1: &Vec<Vec<u8>>, image2: &Vec<Vec<u8>>) -> Vec<(usize
     matches
 }
 
-fn match_test() {
-    let fingerprint_image1 = vec![
-        vec![0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
-        vec![0, 1, 1, 0, 0, 1, 0, 0, 0, 0],
-        vec![0, 1, 0, 0, 0, 1, 0, 0, 0, 0],
-        vec![0, 0, 1, 0, 0, 1, 0, 0, 0, 0],
-        vec![0, 0, 0, 1, 1, 0, 0, 0, 0, 0],
-        vec![0, 1, 1, 0, 1, 1, 0, 0, 0, 0],
-        vec![1, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-        vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 0],
-        vec![0, 0, 0, 1, 0, 0, 0, 1, 0, 0],
-        vec![0, 1, 1, 1, 0, 0, 0, 0, 0, 1],
-        vec![0, 0, 0, 1, 1, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-    ];
-
-    let fingerprint_image2 = vec![
-        vec![0, 0, 1, 0, 1, 0, 0, 0, 0, 1],
-        vec![0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 1, 0, 1, 0, 0, 1, 0],
-        vec![0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 1, 0, 0, 0, 1, 0],
-        vec![0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
-        vec![1, 0, 0, 0, 0, 0, 0, 0, 1, 0],
-        vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        vec![0, 0, 0, 0, 1, 0, 0, 1, 0, 0],
-        vec![0, 1, 0, 0, 0, 0, 0, 1, 0, 0],
-        vec![0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-        vec![0, 0, 0, 0, 1, 0, 1, 0, 0, 0],
-        vec![0, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-    ];
-    
-    
-     let fingerprint_image3 = vec![
-        vec![0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
-        vec![0, 1, 1, 0, 0, 1, 0, 0, 0, 0],
-        vec![0, 1, 0, 0, 0, 1, 0, 0, 0, 0],
-        vec![0, 0, 1, 0, 0, 1, 0, 0, 0, 0],
-        vec![0, 0, 0, 1, 1, 0, 0, 0, 0, 0],
-        vec![0, 1, 1, 0, 1, 1, 0, 0, 0, 0],
-        vec![1, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-        vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 0],
-        vec![0, 0, 0, 1, 0, 0, 0, 1, 0, 0],
-        vec![0, 1, 1, 1, 0, 0, 0, 0, 0, 1],
-        vec![0, 0, 0, 1, 1, 0, 0, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-        vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-    ];
-
-
-    let matches = minutiae_matching(&fingerprint_image1, &fingerprint_image2);
-    let matches2 = minutiae_matching(&fingerprint_image1, &fingerprint_image3);
+fn match_test(mat_try: Vec<Vec<u8>>, mat_db: Vec<Vec<u8>>) -> bool {
+    let matches = minutiae_matching(&mat_try, &mat_db);
     
     //println!("Matched minutiae: {:?}", matches);
     
     if matches.len() > 11 {
-        println!("Fingerprints 1 and 2 match!");
+        return true;
     } else {
-        println!("Fingerprints 1 and 2 do not match!");
-    }
-    
-    //println!("Matched minutiae: {:?}", matches2);
-    if matches2.len() > 11 {
-        println!("Fingerprints 1 and 3 match!");
-    } else {
-        println!("Fingerprints 1 and 3 do not match!");
+        false
     }
 }
 
@@ -219,11 +166,23 @@ fn convert_image_to_binary(file_path: &str) -> io::Result<Vec<u8>> {
     Ok(image)
 }
 
-fn binary_to_image(image: &Vec<u8>, file_path: &str) -> io::Result<()> {
-    let mut file = File::create(file_path)?;
-    file.write_all(image)?;
+fn binary_to_image(image_data: &Vec<u8>, output_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let img = image::load_from_memory(image_data).unwrap();
+    let mut output_file = File::create(output_path)?;
+    img.write_to(&mut output_file, ImageFormat::Png)?;
     Ok(())
-}   
+}
+
+
+// Function to flatten Vec<Vec<u8>> into Vec<u8>
+fn flatten(vec: Vec<Vec<u8>>) -> Vec<u8> {
+    vec.into_iter().flatten().collect()
+}
+
+// Function to reconstruct Vec<Vec<u8>> from Vec<u8>
+fn reconstruct(flat: Vec<u8>, rows: usize, cols: usize) -> Vec<Vec<u8>> {
+    flat.chunks(cols).map(|chunk| chunk.to_vec()).collect()
+}
 
 
 #[tokio::main]
@@ -265,15 +224,18 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
 
     let login_button = Button::new("Login").on_click(move |_ctx, data: &mut AppState, _env| {
         let _username = data.username.clone();
-        my_child_login(_username.clone(), Arc::clone(&pool_clone1));
+        let logged = my_child_login(_username.clone(), Arc::clone(&pool_clone1));
         //TODO Handle login failure
-        data.view = ViewSelector::Credentials;
 
-        my_child_update(&pool_clone1, &_username, None, None, None, data);
-        //_ctx.submit_command(DruidCommand::new(SHOW_CREDENTIALS, (), Target::Global));
-        //_ctx.submit_command(LOGIN);
-        //TODO CALL VERIFICATION FUNCTION
-        //TODO LAUNCH CREDENTIALS UI
+        println!("Logged: {}", logged);
+
+        if logged {
+            data.view = ViewSelector::Credentials;
+            my_child_update(&pool_clone1, &_username, None, None, None, data);
+        }
+
+        //TDOO notify not logged in
+
     });
 
     let pool_clone2 = Arc::clone(&pool);
@@ -355,6 +317,10 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
             //let tx = _ctx.get_external_handle();
             
             my_child_update(&binding, &user, Some(&site), Some(&site_username), Some(&site_password), data);
+
+            data.site = "".to_string();
+            data.site_username = "".to_string();
+            data.site_password = "".to_string();
         }
     });
 
@@ -576,7 +542,7 @@ fn my_child_update(binding: &Arc<SqlitePool>, user: &str, site: Option<&str>, si
     });
 }
 
-fn my_child_login(_username: String, pool: Arc<SqlitePool>) {
+fn my_child_login(_username: String, pool: Arc<SqlitePool>) -> bool{
     let result = task::block_in_place (||  {
 
         let task_result = tokio::runtime::Builder::new_current_thread()
@@ -588,71 +554,52 @@ fn my_child_login(_username: String, pool: Arc<SqlitePool>) {
             if let Err(e) = call_fingerprint_capture().await {
                 eprintln!("Failed to call fingerprint capture: {}", e);
     
-                return;
+                return false;
             }
 
             let user = get_user(&pool, &_username).await.expect("Failed to find user");
+            println!("User: {:?} found", user);
 
             if user.is_some() {
 
-                let image_login = binary_to_image(&user.unwrap().fingerprint_image, "data/fingerprint_Login.bmp").expect("Failed to convert image to binary");
+                let vec1 = user.unwrap().fingerprint_image;
+                let vec2 = reconstruct(vec1, 80, 64);
 
+                println!("Fingerprint image loaded");
+                
+
+                let image_path = String::from("data/fingerprint_Input.bmp");
+                let hist_try = histogram_equalization(&image_path);
+                let bin_try = binarization(hist_try.clone(), 128);
+                let thin_try = thin(&bin_try);
+                let minutia_try = mark_minutia(&thin_try);
+                let res_image_try = remove_false_minutia(thin_try, minutia_try, 10.0, 0.5);
                 //TODO  :
                 ///     -LOAD FINGERPRINT IMAGE
                 //      -PREPROCESS
                 ///     -EXTRACT MINUTIAE
                 ///     -MATCH MINUTIAE
 
-                //let matches = minutiae_matching(&image_login, &attempt_image);
-                if true {//matches.len() > 11 {
-                    println!("Fingerprints match!");
+                println!("About to do mathces");
+                let matches = minutiae_matching(&res_image_try, &vec2);
+                println!("Matches: {:?}", matches);
+                if matches.len() > 11 {
+                    println!("Fingerprints match! ta mere");
+                    return true;
                 } else {
                     println!("Fingerprints do not match!");
+                    return false;
                 }
+                return matches.len() > 11;
             } else {
                 println!("User not found");
             }
-            println!("User successfully logged in");
-    
+            false
         });
+        task_result
     });
+    result
 }
-
-fn login_ui(pool: Arc<SqlitePool>) -> impl druid::Widget<AppState> {
-    let label = Label::new("Bioguard Login").padding(5.0);
-
-    let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
-
-    let pool_clone = Arc::clone(&pool);
-    let pool_clone2 = Arc::clone(&pool);
-
-    let login_button = Button::new("Login").on_click(move |_ctx, data: &mut AppState, _env| {
-        let _username = data.username.clone();
-        my_child_login(_username.clone(), Arc::clone(&pool_clone));
-        //TODO Handle login failure
-        _ctx.new_window(WindowDesc::new(credentials_ui(Arc::clone(&pool_clone2), &_username.clone())));
-        //_ctx.submit_command(LOGIN);
-        //TODO CALL VERIFICATION FUNCTION
-        //TODO LAUNCH CREDENTIALS UI
-    });
-
-    let pool_clone = Arc::clone(&pool);
-    let register_button = Button::new("Register").on_click(move |_ctx, data: &mut AppState, _env| {
-        _ctx.new_window(WindowDesc::new(register_ui(Arc::clone(&pool_clone))));
-    });
-    
-    Flex::column()
-    .with_child(label)
-    .with_spacer(20.0)
-    .with_child(username_input)
-    .with_spacer(20.0)
-    .with_child(login_button)
-    .with_spacer(20.0)
-    .with_child(register_button)
-    
-}
-
-
 
 fn my_child_register(_username: String, pool: Arc<SqlitePool>) {
     let result = task::block_in_place (||  {
@@ -669,123 +616,20 @@ fn my_child_register(_username: String, pool: Arc<SqlitePool>) {
                 return;
             }
             
-            let image_path = Path::new("data/fingerprint_Input.bmp");
-            let binary_data = convert_image_to_binary(image_path.to_str().unwrap()).expect("Failed to convert image to binary");
+            let image_path = String::from("data/fingerprint_Input.bmp");
+            let hist_try = histogram_equalization(&image_path);
+            let bin_try = binarization(hist_try.clone(), 128);
+            let thin_try = thin(&bin_try);
+            let minutia_try = mark_minutia(&thin_try);
+            let res_image_try = remove_false_minutia(thin_try, minutia_try, 10.0, 0.5);
             
-            save_user(&pool, &_username, binary_data).await.expect("Failed to save user");
+            save_user(&pool, &_username, flatten(res_image_try)).await.expect("Failed to save user");
             println!("User saved successfully");
     
         });
     });
     
     
-}
-
-fn register_ui(pool: Arc<SqlitePool>) -> impl druid::Widget<AppState> {
-
-    let label = Label::new("Bioguard").padding(5.0);
-
-    let username_input = TextBox::new().with_placeholder("Username").lens(AppState::username);
-    
-    let info = Label::new("To register your account with your fingerprint,\nPlease click on the Register button").padding(5.0);
-    
-    let register_button = Button::new("Register").on_click(move |_ctx, data: &mut AppState, _env| {
-        
-        let pool = Arc::clone(&pool);
-        let _username = data.username.clone();
-        let mut ret = 0;
-        my_child_register(_username.clone(), Arc::clone(&pool));
-
-        /*if ret == 1 {
-            println!("Launch new windows");
-        }*/
-        println!("Registering user");
-
-        _ctx.new_window(WindowDesc::new(credentials_ui(Arc::clone(&pool), &_username)));
-
-    });
-    
-    Flex::column()
-    .with_child(label)
-    .with_spacer(20.0)
-    .with_child(username_input)
-    .with_spacer(20.0)
-    .with_child(info)
-    .with_spacer(20.0)
-    .with_child(register_button)
-
-    
-}
-
-fn credentials_ui(pool: Arc<SqlitePool>, _username: &str) -> impl druid::Widget<AppState> {
-    let label = Label::new("Your Credentials").padding(5.0);
-
-    let site_input = TextBox::new().with_placeholder("Site").lens(AppState::site);
-    let site_username_input = TextBox::new().with_placeholder("Site Username").lens(AppState::site_username);
-    let site_password_input = TextBox::new().with_placeholder("Site Password").lens(AppState::site_password);
-
-    let user = _username.to_string();
-    let binding = pool.clone();
-    let cred = get_credentials(&binding, &user);
-
-
-    let mut list = List::new(|| {
-        Label::new(|cred: &Credential, _env: &_| format!("Site: {}, Username: {}, Password: {}", cred.site, cred.site_username, cred.site_password))
-    }).lens(AppState::credentials);
-
-    let user = _username.to_string();
-    let save_button = Button::new("Add Credential").on_click(move |_ctx, data: &mut AppState, _env| {
-
-        let user = user.clone();
-        let binding = pool.clone();
-        let site = data.site.clone();
-        let site_username = data.site_username.clone();
-        let site_password = data.site_password.clone();
-        let mut data_clone = data.clone();
-
-        tokio::spawn(async move {
-            match save_credentials(&binding, &user, &site, &site_username, &site_password).await {
-                Ok(_) => {
-                    println!("Credential saved successfully");
-                    match get_credentials(&binding, &user).await {
-                        Ok(creds) => {
-                            data_clone.credentials = creds.into();
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to get credentials: {}", e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to save credential: {}", e);
-                }
-            }
-        });
-
-        //TODO CALL SAVE CREDENTIALS FUNCTION
-        println!("credential saved successfully");
-        /*let rt = Runtime::new().unwrap();
-        let pool = rt.block_on(establish_connection());
-        //let user_id: i64 = get_user(&pool, &data.username).expect("Failed to find user").id;
-
-        rt.block_on(save_credentials(&pool, 0/*user_id*/, &data.site, &data.site_username, &data.site_password))
-        .expect("Failed to save credentials");*/
-    });
-
-
-    
-    Flex::column()
-    .with_child(label)
-    .with_spacer(20.0)
-    .with_child(site_input)
-    .with_spacer(20.0)
-    .with_child(site_username_input)
-    .with_spacer(20.0)
-    .with_child(site_password_input)
-    .with_spacer(20.0)
-    .with_child(save_button)
-    .with_spacer(20.0)    
-    .with_child(list)
 }
 
 struct AppDelegate {
@@ -800,42 +644,362 @@ impl AppDelegate {
     }
     
 }
-/*
-impl druid::AppDelegate<AppState> for AppDelegate {
-    fn command(
-        &mut self,
-        _ctx: &mut druid::DelegateCtx,
-        _target: druid::Target,
-        cmd: &druid::Command,
-        data: &mut AppState,
-        _env: &druid::Env,
-    ) -> Handled {
-        if cmd.is(LOGIN) {
-            let rt = Runtime::new().unwrap();
 
-            // Read the fingerprint image
-            let mut file = File::open(&data.fingerprint_path).expect("Failed to open fingerprint image");
-            let mut fingerprint = Vec::new();
-            file.read_to_end(&mut fingerprint).expect("Failed to read fingerprint image");
 
-            match rt.block_on(get_user(&self.pool, &data.username)) {
-                Ok(user) => {
-                    if 1 == 1 //TODO CALL VERIFICATION FUNCTION
-                    {
-                        _ctx.new_window(WindowDesc::new(credentials_ui()).title("Your Credentials"));
-                    } else {
-                        println!("Fingerprint does not match");
-                    }
-                }
-                Err(_) => {
-                    rt.block_on(save_user(&self.pool, &data.username, fingerprint)).expect("Failed to save user");
-                    let user = rt.block_on(get_user(&self.pool, &data.username)).expect("Failed to find user");
-                    _ctx.new_window(WindowDesc::new(credentials_ui()).title("Your Credentials"));
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MinutiaType {
+    RidgeEnding,
+    Bifurcation,
+}
+
+#[derive(Debug, Clone)]
+pub struct Minutia {
+    x: usize,
+    y: usize,
+    minutia_type: MinutiaType,
+}
+
+///PREPROCESSING BLOCK
+///
+// Histogram equalization
+fn histogram_equalization(image_path: &str) -> Vec<Vec<u8>> {
+    let img = image::open(&Path::new(image_path)).unwrap().to_luma8();
+    let mut histogram = [0u32; 256];
+    let mut cdf = [0u32; 256];
+    let mut res = vec![vec![0u8; img.width() as usize]; img.height() as usize];
+
+    for pixel in img.pixels() {
+        histogram[pixel[0] as usize] += 1;
+    }
+
+    // Calculate the cumulative distribution function (CDF)
+    cdf[0] = histogram[0];
+    for i in 1..256 {
+        cdf[i] = cdf[i - 1] + histogram[i];
+    }
+
+    let n = img.width() * img.height();
+    let scale = 255.0 / (n as f32);
+    for (y, row) in res.iter_mut().enumerate() {
+        for (x, pixel) in row.iter_mut().enumerate() {
+            let orig = img.get_pixel(x as u32, y as u32)[0];
+            *pixel = (cdf[orig as usize] as f32 * scale).round() as u8;
+        }
+    }
+    res
+}
+
+// To Black&Whrite
+fn binarization(input: Vec<Vec<u8>>, threshold: u8) -> Vec<Vec<u8>> {
+    let mut res = vec![vec![0u8; input[0].len()]; input.len()];
+    for (y, row) in input.iter().enumerate() {
+        for (x, &pixel) in row.iter().enumerate() {
+            res[y][x] = if pixel > threshold { 1 } else { 0 };
+        }
+    }
+    res
+}
+///
+///END OF PREPROCESSING BLOCK
+
+///EXTRACTION BLOCK
+///
+//Implements thhe Zhang-Suen thinning algorithm (https://dl.acm.org/doi/epdf/10.1145/357994.358023)
+//and applies the 3 morphological operations after the thinngin
+fn thin(image: &Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    let mut image = image.clone();
+    let mut changed = true;
+    
+    while changed {
+        changed = false;
+        let mut to_del = vec![vec![false; image[0].len()]; image.len()];
+        
+        // Step 1
+        for i in 1..image.len() - 1 {
+            for j in 1..image[0].len() - 1 {
+                if image[i][j] == 1 && step1(&image, i, j) {
+                    to_del[i][j] = true;
+                    changed = true;
                 }
             }
-            return Handled::Yes;
         }
-        Handled::No
+        //Remove pixels marked in Step 1 
+        for i in 0..image.len() {
+            for j in 0..image[0].len() {
+                if to_del[i][j] {
+                    image[i][j] = 0;
+                }
+            }
+        }
+        
+        // Step 2
+        for i in 1..image.len() - 1 {
+            for j in 1..image[0].len() - 1 {
+                if image[i][j] == 1 && step2(&image, i, j) {
+                    to_del[i][j] = true;
+                    changed = true;
+                }
+            }
+        }
+        //Remove pixels marked in Strp 2
+        for i in 0..image.len() {
+            for j in 0..image[0].len() {
+                if to_del[i][j] {
+                    image[i][j] = 0;
+                }
+            }
+        }
     }
-}*/
+   
+    remove_h_breaks(&mut image);
+    remove_isolated_points(&mut image);
+    remove_spikes(&mut image);
 
+    image
+}
+
+//Applies the first step conditions of the algothithm
+fn step1(image: &Vec<Vec<u8>>, x: usize, y: usize) -> bool {
+    let neighbors = get_neighbors(image, x, y);
+    let transition_count = count_transitions(&neighbors);
+    let neighbor_count = neighbors.iter().sum::<u8>();
+    
+    neighbor_count >= 2 && neighbor_count <= 6 &&
+    transition_count == 1 &&
+    neighbors[0] * neighbors[2] * neighbors[4] == 0 &&
+    neighbors[2] * neighbors[4] * neighbors[6] == 0
+}
+//Applies the second step conditions og the algorithm
+fn step2(image: &Vec<Vec<u8>>, x: usize, y: usize) -> bool {
+    let neighbors = get_neighbors(image, x, y);
+    let transition_count = count_transitions(&neighbors);
+    let neighbor_count = neighbors.iter().sum::<u8>();
+    
+    neighbor_count >= 2 && neighbor_count <= 6 &&
+    transition_count == 1 &&
+    neighbors[0] * neighbors[2] * neighbors[6] == 0 &&
+    neighbors[0] * neighbors[4] * neighbors[6] == 0
+}
+
+//Returns a vector with the 8 neighbours in the specified order
+fn get_neighbors(image: &Vec<Vec<u8>>, x: usize, y: usize) -> Vec<u8> {
+    vec![
+        image[x - 1][y],     // N
+        image[x - 1][y + 1], // NE
+        image[x][y + 1],     // E
+        image[x + 1][y + 1], // SE
+        image[x + 1][y],     // S
+        image[x + 1][y - 1], // SW
+        image[x][y - 1],     // W
+        image[x - 1][y - 1], // NW
+    ]
+}
+
+//Counts the number of transitions from 0 to 1 (0 is directly followed by 1)
+fn count_transitions(neighbors: &Vec<u8>) -> usize {
+    let mut count = 0;
+    for i in 0..neighbors.len() {
+        if neighbors[i] == 0 && neighbors[(i + 1) % neighbors.len()] == 1 {
+            count += 1;
+        }
+    }
+    count
+}
+
+//Desides whether the pixel is part of an H break by comparing in to two known neighbour H-patterns
+fn is_h_break(image: &Vec<Vec<u8>>, x: usize, y: usize) -> bool {
+    let neighbors = get_neighbors(image, x, y);
+
+    let reference = vec![
+        vec![1, 0, 1, 0, 1, 1, 1, 0], // H pattern
+        vec![1, 1, 1, 0, 1, 0, 1, 0], // Rotated H pattern
+    ];
+
+    reference.iter().any(|r| {
+        neighbors.iter().zip(r.iter()).all(|(x, y)| x == y)
+    })
+}
+//Morphological operation to remove the H breaks
+fn remove_h_breaks(image: &mut Vec<Vec<u8>>) {
+    let mut changed = true;
+
+    while changed {
+        changed = false;
+        let mut to_del = vec![vec![false; image[0].len()]; image.len()];
+
+        for i in 1..image.len() - 1 {
+            for j in 1..image[0].len() - 1 {
+                if is_h_break(&image, i, j) {
+                    to_del[i][j] = true;
+                    changed = true;
+                }
+            }
+        }
+
+        for i in 0..image.len() {
+            for j in 0..image[0].len() {
+                if to_del[i][j] {
+                    image[i][j] = 0;
+                }
+            }
+        }
+    }
+}
+
+//Removes the isolated pixels
+fn remove_isolated_points(image: &mut Vec<Vec<u8>>) {
+    let mut to_del = vec![vec![false; image[0].len()]; image.len()];
+
+    for i in 1..image.len() - 1 {
+        for j in 1..image[0].len() - 1 {
+            if image[i][j] == 1 && is_isolated(&image, i, j) {
+                to_del[i][j] = true;
+            }
+        }
+    }
+
+    for i in 0..image.len() {
+        for j in 0..image[0].len() {
+            if to_del[i][j] {
+                image[i][j] = 0;
+            }
+        }
+    }
+}
+//Isolated == all the neighbouring pixels are 0
+fn is_isolated(image: &Vec<Vec<u8>>, x: usize, y: usize) -> bool {
+    let neighbors = get_neighbors(image, x, y);
+    neighbors.iter().sum::<u8>() == 0
+}
+
+//Removes spikes
+fn remove_spikes(image: &mut Vec<Vec<u8>>) {
+    let mut to_del = vec![vec![false; image[0].len()]; image.len()];
+
+    for i in 1..image.len() - 1 {
+        for j in 1..image[0].len() - 1 {
+            if image[i][j] == 1 && is_spike(&image, i, j) {
+                to_del[i][j] = true;
+            }
+        }
+    }
+
+    for i in 0..image.len() {
+        for j in 0..image[0].len() {
+            if to_del[i][j] {
+                image[i][j] = 0;
+            }
+        }
+    }
+}
+
+//Pixel is a spike == it has exactly one ridge pixel in its vacinity
+fn is_spike(image: &Vec<Vec<u8>>, x: usize, y: usize) -> bool {
+    let neighbors = get_neighbors(image, x, y);
+    neighbors.iter().sum::<u8>() == 1
+}
+///
+///END OF EXTRACTION BLOCK
+
+
+///POSTPROCESSING BLOCK
+///
+//Marks each valuable pixel (not a regular ridge) as either an ending, or a bifurcation point.
+//Stores this information in a structure and returns a vector of valuale minutia
+fn mark_minutia(image: &Vec<Vec<u8>>) -> Vec<Minutia> {
+    let mut res = Vec::new();
+
+    for i in 1..image.len() - 1 {
+        for j in 1..image[0].len() - 1 {
+            if image[i][j] == 1 {
+                let neighbors = get_neighbors(image, i, j);
+                let neighbor_count = neighbors.iter().sum::<u8>();
+
+                if neighbor_count == 1 {
+                    res.push(Minutia {
+                        x: i,
+                        y: j,
+                        minutia_type: MinutiaType::RidgeEnding,
+                    });
+                } else if neighbor_count == 3 {
+                    res.push(Minutia {
+                        x: i,
+                        y: j,
+                        minutia_type: MinutiaType::Bifurcation,
+                    });
+                }
+            }
+        }
+    }
+    res
+}
+
+fn euclidean_distance(a: &Minutia, b: &Minutia) -> f64 {
+    (((a.x as f64 - b.x as f64).powi(2) + (a.y as f64 - b.y as f64).powi(2)) as f64).sqrt()
+}
+fn calculate_angle(a: &Minutia, b: &Minutia) -> f64 {
+    let delta_x = b.x as f64 - a.x as f64;
+    let delta_y = b.y as f64 - a.y as f64;
+    delta_y.atan2(delta_x).abs()
+}
+//Removes the false minutia using Fuzzy rules
+fn remove_false_minutia(mut image: Vec<Vec<u8>>, minutia: Vec<Minutia>, distance_threshold: f64, angle_threshold: f64) -> Vec<Vec<u8>> {
+    let mut to_del = Vec::new();
+    for i in 0..minutia.len() {
+        for j in (i + 1)..minutia.len() {
+            let mut is_false = false;
+
+            let distance = euclidean_distance(&minutia[i], &minutia[j]);
+
+            // Rule 1: Termination and Bifurcation on the same ridge
+            if distance < distance_threshold
+                && minutia[i].minutia_type != minutia[j].minutia_type
+            {
+                is_false = true;
+            }
+
+            // Rule 2: Distance between two bifurcations on the same ridge
+            if !is_false
+                && distance < distance_threshold
+                && minutia[i].minutia_type == MinutiaType::Bifurcation
+                && minutia[j].minutia_type == MinutiaType::Bifurcation
+            {
+                is_false = true;
+            }
+
+            // Rule 3: Distance between two terminations on the same ridge
+            if !is_false
+                && distance < distance_threshold
+                && minutia[i].minutia_type == MinutiaType::RidgeEnding
+                && minutia[j].minutia_type == MinutiaType::RidgeEnding
+            {
+                is_false = true;
+            }
+
+            // Rule 4: Angle
+            if !is_false
+                && distance < distance_threshold
+                && minutia[i].minutia_type == MinutiaType::RidgeEnding
+                && minutia[j].minutia_type == MinutiaType::RidgeEnding
+            {
+                let angle_variation = calculate_angle(&minutia[i], &minutia[j]);
+
+                if angle_variation < angle_threshold {
+                    is_false = true;
+                }
+            }
+
+            if is_false {
+                to_del.push(minutia[i].clone());
+                to_del.push(minutia[j].clone());
+            }
+        }
+    }
+
+    for m in &to_del {
+        image[m.x][m.y] = 0;
+    }
+
+    image
+}

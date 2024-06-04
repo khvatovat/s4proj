@@ -293,6 +293,10 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     let quit_button = Button::new("Quit").on_click(|_ctx, _data: &mut AppState, _env| {
         std::process::exit(0);
     });
+
+    let back_button = Button::new("Back to login").on_click(|_ctx, data: &mut AppState, _env| {
+        data.view = ViewSelector::Login;
+    });
     
     let register_view = Flex::column()
     .with_child(label_reg)
@@ -303,6 +307,8 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     .with_spacer(20.0)
     .with_child(register_button_reg)
     .with_spacer(60.0)
+    .with_child(back_button)
+    .with_spacer(20.0)
     .with_child(quit_button);
 
 
@@ -431,6 +437,11 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     let quit_button = Button::new("Quit").on_click(|_ctx, _data: &mut AppState, _env| {
         std::process::exit(0);
     });
+
+    let logout_button = Button::new("Logout").on_click(|_ctx, data: &mut AppState, _env| {
+        data.view = ViewSelector::Login;
+        data.username = "".to_string();
+    });
         
     let credentials_view = 
     Flex::column()
@@ -454,6 +465,8 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
             .with_child(table)
     )
     .with_spacer(60.0)
+    .with_child(logout_button)
+    .with_spacer(20.0)
     .with_child(quit_button);
 
 
@@ -593,17 +606,12 @@ fn my_child_login(_username: String, pool: Arc<SqlitePool>) -> bool{
                 let thin_try = thin(&bin_try);
                 let minutia_try = mark_minutia(&thin_try);
                 let res_image_try = remove_false_minutia(thin_try, minutia_try, 10.0, 0.5);
-                //TODO  :
-                ///     -LOAD FINGERPRINT IMAGE
-                //      -PREPROCESS
-                ///     -EXTRACT MINUTIAE
-                ///     -MATCH MINUTIAE
 
                 println!("About to do mathces");
                 let matches = minutiae_matching(&res_image_try, &vec2);
                 println!("Matches: {:?} \nMatches len = {}", matches, matches.len());
                 if matches.len() > 120 {
-                    println!("Fingerprints match! ta mere");
+                    println!("Fingerprints match!");
                     return true;
                 } else {
                     println!("Fingerprints do not match!");

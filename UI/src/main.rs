@@ -199,7 +199,7 @@ async fn main() {
 
     create_tables(&pool).await.expect("Failed to create tables");
     
-    let size = (800.0, 400.0);
+    let size = (800.0, 450.0);
     let main_windows = WindowDesc::new(build_ui(pool.clone().into()))
     .title("Bioguard")
     .window_size(size);
@@ -214,6 +214,9 @@ async fn main() {
 
 fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
 
+    let quit_button = Button::new("Quit").on_click(|_ctx, _data: &mut AppState, _env| {
+        std::process::exit(0);
+    });
 
     // LOGIN VIEW
     let label_log = Label::new("Bioguard Login").padding(5.0);
@@ -253,7 +256,9 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     .with_spacer(20.0)
     .with_child(login_button)
     .with_spacer(20.0)
-    .with_child(register_button_log);
+    .with_child(register_button_log)
+    .with_spacer(60.0)
+    .with_child(quit_button);
 
 
 
@@ -284,6 +289,10 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
             my_child_update(&pool_clone3, &_username, None, None, None, data);
             }
         );
+
+    let quit_button = Button::new("Quit").on_click(|_ctx, _data: &mut AppState, _env| {
+        std::process::exit(0);
+    });
     
     let register_view = Flex::column()
     .with_child(label_reg)
@@ -292,7 +301,9 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     .with_spacer(20.0)
     .with_child(info)
     .with_spacer(20.0)
-    .with_child(register_button_reg);
+    .with_child(register_button_reg)
+    .with_spacer(60.0)
+    .with_child(quit_button);
 
 
     // CREDENTIALS VIEW
@@ -313,8 +324,6 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
             let site = data.site.clone();
             let site_username = data.site_username.clone();
             let site_password = data.site_password.clone();
-
-            //let tx = _ctx.get_external_handle();
             
             my_child_update(&binding, &user, Some(&site), Some(&site_username), Some(&site_password), data);
 
@@ -336,6 +345,8 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
             my_child_update(&binding, &user, None, None, None, data);
         }
     });    
+
+
 
    // Table headers
    let headers = Flex::row()
@@ -417,6 +428,9 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     .with_child(headers)
     .with_child(credentials_list);
 
+    let quit_button = Button::new("Quit").on_click(|_ctx, _data: &mut AppState, _env| {
+        std::process::exit(0);
+    });
         
     let credentials_view = 
     Flex::column()
@@ -438,7 +452,9 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
             )
             .with_spacer(40.0)
             .with_child(table)
-    );
+    )
+    .with_spacer(60.0)
+    .with_child(quit_button);
 
 
     // MAIN VIEW
@@ -494,6 +510,9 @@ fn my_child_delete(binding: &Arc<SqlitePool>, user: &str, site: Option<&str>, da
         .unwrap()
         .block_on(async{    
             delete_credentials(&binding, &user, &(site.unwrap())).await.expect("Failed to delete credential");
+            data.site = "".to_string();
+            data.site_username = "".to_string();
+            data.site_password = "".to_string();
         });
     });
 }
@@ -582,15 +601,15 @@ fn my_child_login(_username: String, pool: Arc<SqlitePool>) -> bool{
 
                 println!("About to do mathces");
                 let matches = minutiae_matching(&res_image_try, &vec2);
-                println!("Matches: {:?}", matches);
-                if matches.len() > 11 {
+                println!("Matches: {:?} \nMatches len = {}", matches, matches.len());
+                if matches.len() > 120 {
                     println!("Fingerprints match! ta mere");
                     return true;
                 } else {
                     println!("Fingerprints do not match!");
                     return false;
                 }
-                return matches.len() > 11;
+                return matches.len() > 120;
             } else {
                 println!("User not found");
             }

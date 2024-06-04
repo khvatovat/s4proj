@@ -1,39 +1,33 @@
-#[macro_use]
+
 extern crate sqlx;
 extern crate dotenv;
 
 mod extractor;
-use crate::extractor::*;
 
-use std::io::Write;
 use database::*;
-use tokio::main;
 use tokio::runtime::Runtime;
-use tokio::sync::oneshot;
 use tokio::task;
-use sqlx::{pool, SqlitePool};
+use sqlx::SqlitePool;
 use dotenv::dotenv;
 use std::env;
 use std::fs::File;
-use std::future::IntoFuture;
 use std::io::Read;
 use std::path::Path;
 
-use image::{load_from_memory, ImageError, DynamicImage, ImageFormat};
+use image::{ImageFormat};
 
 mod models;
 mod database;
 
-use crate::models::{User, Credential};
-use crate::database::{establish_connection, create_tables, save_user, get_user, get_credentials};
-use std::process::{ExitStatus};
+use crate::models::{Credential};
+use crate::database::{create_tables, save_user, get_user, get_credentials};
 use tokio::process::Command;
 use std::io;
 
 use std::sync::Arc;
 
-use druid::widget::{Button, Flex, Label, Padding, TextBox, Scroll, List, SizedBox};
-use druid::{AppDelegate as OtherAppDelegate, AppLauncher, Data, Handled, Lens, Selector, WidgetExt, WindowDesc, Widget, Command as DruidCommand, Target, Color};
+use druid::widget::{Button, Flex, Label, TextBox, List, SizedBox};
+use druid::{AppLauncher, Data, Lens, Selector, WidgetExt, WindowDesc, Widget, Color};
 
 #[derive(Debug, Clone, Data, Lens)]
 struct AppState {
@@ -110,11 +104,8 @@ fn detect_minutiae(image: &Vec<Vec<u8>>) -> Vec<(usize, usize)> {
 
 // Function to perform minutiae matching between two fingerprint images
 fn minutiae_matching(image1: &Vec<Vec<u8>>, image2: &Vec<Vec<u8>>) -> Vec<(usize, usize)> {
-    println!("Matching minutiae1 {}, len[0] = {}", image1.len(), image1[0].len());
     let minutiae1 = detect_minutiae(image1);
-    println!("Minutiae1 done");
     let minutiae2 = detect_minutiae(image2);
-    println!("Minutiae2 done");
 
     // Simple matching algorithm: matching minutiae if they are close enough
     let mut matches = Vec::new();
@@ -132,8 +123,6 @@ fn minutiae_matching(image1: &Vec<Vec<u8>>, image2: &Vec<Vec<u8>>) -> Vec<(usize
 
 fn match_test(mat_try: Vec<Vec<u8>>, mat_db: Vec<Vec<u8>>) -> bool {
     let matches = minutiae_matching(&mat_try, &mat_db);
-    
-    //println!("Matched minutiae: {:?}", matches);
     
     if matches.len() > 11 {
         return true;
@@ -207,7 +196,6 @@ async fn main() {
     let initial_state = AppState::new();
 
     AppLauncher::with_window(main_windows)
-    //.delegate(AppDelegate::new(pool))
     .launch(initial_state)
     .expect("Failed to launch application");
 }
@@ -228,24 +216,18 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     let login_button = Button::new("Login").on_click(move |_ctx, data: &mut AppState, _env| {
         let _username = data.username.clone();
         let logged = my_child_login(_username.clone(), Arc::clone(&pool_clone1));
-        //TODO Handle login failure
-
-        println!("Logged: {}", logged);
+        
 
         if logged {
             data.view = ViewSelector::Credentials;
             my_child_update(&pool_clone1, &_username, None, None, None, data);
         }
-
-        //TDOO notify not logged in
-
     });
 
     let pool_clone2 = Arc::clone(&pool);
-    let register_button_log = Button::new("Register").on_click({
+    let register_button_log = Button::new("Go to register").on_click({
         move |_ctx, data: &mut AppState, _env| {
             data.view = ViewSelector::Register;
-            //_ctx.submit_command(DruidCommand::new(SHOW_REGISTER, (), Target::Global));
             }
     });
     
@@ -272,17 +254,10 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     let pool_clone3 = Arc::clone(&pool);
     let register_button_reg = Button::new("Register").on_click(
         move |_ctx, data: &mut AppState, _env| {
-            //_ctx.submit_command(DruidCommand::new(SHOW_REGISTER, (), Target::Global));
         
-            //let pool_clone3 = Arc::clone(&pool);
             let _username = data.username.clone();
             let mut ret = 0;
             my_child_register(_username.clone(), Arc::clone(&pool_clone3));
-
-            /*if ret == 1 {
-                println!("Launch new windows");
-            }*/
-            println!("Registering user");
 
             data.view = ViewSelector::Credentials;
 
@@ -484,36 +459,6 @@ fn build_ui(pool: Arc<SqlitePool>) -> impl Widget<AppState> {
     main_view
 }
 
-
-struct Delegate;
-
-impl druid::AppDelegate<AppState> for Delegate {
-    fn command(
-        &mut self,
-        _ctx: &mut druid::DelegateCtx,
-        _target: druid::Target,
-        cmd: &druid::Command,
-        data: &mut AppState,
-        _env: &druid::Env,
-    ) -> druid::Handled {
-        if cmd.is(SHOW_REGISTER) {
-            data.view = ViewSelector::Register;
-            return druid::Handled::Yes;
-        } else if cmd.is(SHOW_LOGIN) {
-            data.view = ViewSelector::Login;
-            return druid::Handled::Yes;
-        } else if cmd.is(SHOW_CREDENTIALS) {
-            data.view = ViewSelector::Credentials;
-            return druid::Handled::Yes;
-        } else if let Some(credentials) = cmd.get(UPDATE_CREDENTIALS) {
-            println!("Updating credentials");
-            // **Modified**: Update credentials in AppState
-            data.credentials = credentials.clone();
-            return druid::Handled::Yes;
-        }
-        druid::Handled::No
-    }
-}
 fn my_child_delete(binding: &Arc<SqlitePool>, user: &str, site: Option<&str>, data: &mut AppState) {
     let result = task::block_in_place (||  {
 
@@ -542,7 +487,6 @@ fn my_child_update(binding: &Arc<SqlitePool>, user: &str, site: Option<&str>, si
         .block_on(async{
             
             if site.unwrap_or("") == "" || site_username.unwrap_or("") == "" || site_password.unwrap_or("") == "" {
-                println!("Just updated, Please fill in all fields");
                 match get_credentials(&binding, &user).await {
                     Ok(creds) => {
                         data.credentials = Arc::new(creds);
@@ -555,7 +499,6 @@ fn my_child_update(binding: &Arc<SqlitePool>, user: &str, site: Option<&str>, si
             }
             match save_credentials(&binding, &user, &(site.unwrap()), &(site_username.unwrap()), &(site_password.unwrap())).await {
                 Ok(_) => {
-                    println!("Credential saved successfully");
                     match get_credentials(&binding, &user).await {
                         Ok(creds) => {
                             data.credentials = Arc::new(creds);
@@ -569,7 +512,6 @@ fn my_child_update(binding: &Arc<SqlitePool>, user: &str, site: Option<&str>, si
                     eprintln!("Failed to save credential: {}", e);
                 }
             }
-    
         });
     });
 }
@@ -582,7 +524,6 @@ fn my_child_login(_username: String, pool: Arc<SqlitePool>) -> bool{
         .build()
         .unwrap()
         .block_on(async{
-            println!("Username: {}", _username);
             if let Err(e) = call_fingerprint_capture().await {
                 eprintln!("Failed to call fingerprint capture: {}", e);
     
@@ -590,16 +531,12 @@ fn my_child_login(_username: String, pool: Arc<SqlitePool>) -> bool{
             }
 
             let user = get_user(&pool, &_username).await.expect("Failed to find user");
-            println!("User: {:?} found", user);
 
             if user.is_some() {
 
                 let vec1 = user.unwrap().fingerprint_image;
                 let vec2 = reconstruct(vec1, 80, 64);
-
-                println!("Fingerprint image loaded");
                 
-
                 let image_path = String::from("data/fingerprint_Input.bmp");
                 let hist_try = histogram_equalization(&image_path);
                 let bin_try = binarization(hist_try.clone(), 128);
@@ -607,9 +544,7 @@ fn my_child_login(_username: String, pool: Arc<SqlitePool>) -> bool{
                 let minutia_try = mark_minutia(&thin_try);
                 let res_image_try = remove_false_minutia(thin_try, minutia_try, 10.0, 0.5);
 
-                println!("About to do mathces");
                 let matches = minutiae_matching(&res_image_try, &vec2);
-                println!("Matches: {:?} \nMatches len = {}", matches, matches.len());
                 if matches.len() > 120 {
                     println!("Fingerprints match!");
                     return true;
@@ -636,7 +571,6 @@ fn my_child_register(_username: String, pool: Arc<SqlitePool>) {
         .build()
         .unwrap()
         .block_on(async{
-            println!("Username: {}", _username);
             if let Err(e) = call_fingerprint_capture().await {
                 eprintln!("Failed to call fingerprint capture: {}", e);
     
@@ -651,7 +585,6 @@ fn my_child_register(_username: String, pool: Arc<SqlitePool>) {
             let res_image_try = remove_false_minutia(thin_try, minutia_try, 10.0, 0.5);
             
             save_user(&pool, &_username, flatten(res_image_try)).await.expect("Failed to save user");
-            println!("User saved successfully");
     
         });
     });

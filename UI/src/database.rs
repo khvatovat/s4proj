@@ -1,6 +1,4 @@
 use sqlx::{sqlite::SqlitePool, Row};
-use std::env;
-use dotenv::dotenv;
 
 use crate::models::{User, Credential};
 
